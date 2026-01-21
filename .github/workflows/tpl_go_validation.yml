@@ -55,16 +55,12 @@ jobs:
             exit 1
           fi
 
-      - name: Copy golangci-lint config to lambda directory
-        run: |
-          cp ${{ github.workspace }}/lambdas/go/.golangci.yaml ${{ inputs.lambda_path }}/.golangci.yaml
-
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.7
           working-directory: ${{ inputs.lambda_path }}
-          args: --timeout 4m
+          args: --timeout 4m --config ${{ github.workspace }}/lambdas/go/.golangci.yaml
           only-new-issues: false
 
       - name: Run tests
