@@ -40,22 +40,35 @@ repos:
         files: ^lambdas/javascript/.*\.js$
         require_serial: true
 
-  - repo: https://github.com/dnephin/pre-commit-golang
-    rev: v0.5.1
+  - repo: local
     hooks:
       - id: go-fmt
+        name: go fmt
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && for file in "$@"; do dir=$(dirname "$file"); while [ "$dir" != "." ] && [ "$dir" != "/" ]; do if [ -f "$dir/go.mod" ]; then (cd "$dir" && gofmt -s -w .); break; fi; dir=$(dirname "$dir"); done; done' --
+        language: system
         files: ^lambdas/go/.*\.go$
+        pass_filenames: true
       - id: go-vet
+        name: go vet
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && for file in "$@"; do dir=$(dirname "$file"); while [ "$dir" != "." ] && [ "$dir" != "/" ]; do if [ -f "$dir/go.mod" ]; then (cd "$dir" && go vet ./...); break; fi; dir=$(dirname "$dir"); done; done' --
+        language: system
         files: ^lambdas/go/.*\.go$
+        pass_filenames: true
       - id: go-mod-tidy
+        name: go mod tidy
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && for file in "$@"; do dir=$(dirname "$file"); if [ -f "$dir/go.mod" ]; then (cd "$dir" && go mod tidy); fi; done' --
+        language: system
         files: ^lambdas/go/.*\.(mod|sum)$
+        pass_filenames: true
       - id: go-unit-tests
-        args: [-race]
+        name: go unit tests
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && for file in "$@"; do dir=$(dirname "$file"); while [ "$dir" != "." ] && [ "$dir" != "/" ]; do if [ -f "$dir/go.mod" ]; then (cd "$dir" && go test ./... -race); break; fi; dir=$(dirname "$dir"); done; done' --
+        language: system
         files: ^lambdas/go/.*\.go$
-
-  - repo: https://github.com/golangci/golangci-lint
-    rev: v2.7.0
-    hooks:
+        pass_filenames: true
       - id: golangci-lint
-        args: [--timeout=4m]
+        name: golangci-lint
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && for file in "$@"; do dir=$(dirname "$file"); while [ "$dir" != "." ] && [ "$dir" != "/" ]; do if [ -f "$dir/go.mod" ]; then (cd "$dir" && golangci-lint run --timeout=4m --config "$(git rev-parse --show-toplevel)/lambdas/go/.golangci.yaml" ./...); break; fi; dir=$(dirname "$dir"); done; done' --
+        language: system
         files: ^lambdas/go/.*\.go$
+        pass_filenames: true
