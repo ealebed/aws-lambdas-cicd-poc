@@ -41,7 +41,9 @@ jobs:
         run: |
           CHANGED=$(git diff --name-only origin/master...HEAD | grep '^lambdas/python/' || true)
           if [ -n "$CHANGED" ]; then
-            LAMBDAS=$(echo "$CHANGED" | sed 's|^lambdas/python/||' | cut -d'/' -f1 | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '["example-lambda"]')
+            # Extract lambda directory names, filtering out files in lambdas/python/ root
+            # Only include paths that have at least one directory component after lambdas/python/
+            LAMBDAS=$(echo "$CHANGED" | sed 's|^lambdas/python/||' | grep '/' | cut -d'/' -f1 | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '[]')
             echo "lambdas=$LAMBDAS" >> $GITHUB_OUTPUT
           else
             echo "lambdas=[]" >> $GITHUB_OUTPUT
@@ -53,7 +55,9 @@ jobs:
         run: |
           CHANGED=$(git diff --name-only origin/master...HEAD | grep '^lambdas/javascript/' || true)
           if [ -n "$CHANGED" ]; then
-            LAMBDAS=$(echo "$CHANGED" | sed 's|^lambdas/javascript/||' | cut -d'/' -f1 | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '["example-lambda"]')
+            # Extract lambda directory names, filtering out files in lambdas/javascript/ root
+            # Only include paths that have at least one directory component after lambdas/javascript/
+            LAMBDAS=$(echo "$CHANGED" | sed 's|^lambdas/javascript/||' | grep '/' | cut -d'/' -f1 | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '[]')
             echo "lambdas=$LAMBDAS" >> $GITHUB_OUTPUT
           else
             echo "lambdas=[]" >> $GITHUB_OUTPUT
@@ -65,7 +69,9 @@ jobs:
         run: |
           CHANGED=$(git diff --name-only origin/master...HEAD | grep '^lambdas/go/' || true)
           if [ -n "$CHANGED" ]; then
-            LAMBDAS=$(echo "$CHANGED" | sed 's|^lambdas/go/||' | cut -d'/' -f1 | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '["example-lambda"]')
+            # Extract lambda directory names, filtering out files in lambdas/go/ root (like .golangci.yaml)
+            # Only include paths that have at least one directory component after lambdas/go/
+            LAMBDAS=$(echo "$CHANGED" | sed 's|^lambdas/go/||' | grep '/' | cut -d'/' -f1 | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '[]')
             echo "lambdas=$LAMBDAS" >> $GITHUB_OUTPUT
           else
             echo "lambdas=[]" >> $GITHUB_OUTPUT
