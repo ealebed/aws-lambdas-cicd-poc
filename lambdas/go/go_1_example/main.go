@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-lambda-go/lambdacontext"
 )
 
 // Response represents the Lambda response structure
@@ -30,9 +31,14 @@ func Handler(ctx context.Context, event map[string]interface{}) (Response, error
 	eventJSON, _ := json.Marshal(event)
 	log.Printf("Event: %s", string(eventJSON))
 
-	// Get function name and request ID from context
+	// Get function name from environment variable
 	functionName := os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
-	requestID := os.Getenv("AWS_LAMBDA_REQUEST_ID")
+
+	// Get request ID from Lambda context
+	requestID := ""
+	if lc, ok := lambdacontext.FromContext(ctx); ok {
+		requestID = lc.AwsRequestID
+	}
 
 	log.Printf("Function name: %s", functionName)
 	log.Printf("Request ID: %s", requestID)

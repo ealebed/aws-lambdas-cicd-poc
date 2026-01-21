@@ -5,29 +5,29 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+
+	"github.com/aws/aws-lambda-go/lambdacontext"
 )
 
 func TestHandler(t *testing.T) {
 	// Set up test environment
 	originalFunctionName := os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
-	originalRequestID := os.Getenv("AWS_LAMBDA_REQUEST_ID")
 
 	os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test-function")
-	os.Setenv("AWS_LAMBDA_REQUEST_ID", "test-request-id")
 	defer func() {
 		if originalFunctionName != "" {
 			os.Setenv("AWS_LAMBDA_FUNCTION_NAME", originalFunctionName)
 		} else {
 			os.Unsetenv("AWS_LAMBDA_FUNCTION_NAME")
 		}
-		if originalRequestID != "" {
-			os.Setenv("AWS_LAMBDA_REQUEST_ID", originalRequestID)
-		} else {
-			os.Unsetenv("AWS_LAMBDA_REQUEST_ID")
-		}
 	}()
 
-	ctx := context.Background()
+	// Create a context with Lambda context containing request ID
+	lc := &lambdacontext.LambdaContext{
+		AwsRequestID: "test-request-id",
+	}
+	ctx := lambdacontext.NewContext(context.Background(), lc)
+
 	event := map[string]interface{}{
 		"key": "value",
 	}
@@ -62,22 +62,15 @@ func TestHandler(t *testing.T) {
 func TestHandlerWithCustomGreeting(t *testing.T) {
 	// Set up test environment
 	originalFunctionName := os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
-	originalRequestID := os.Getenv("AWS_LAMBDA_REQUEST_ID")
 	originalGreeting := os.Getenv("GREETING")
 
 	os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test-function")
-	os.Setenv("AWS_LAMBDA_REQUEST_ID", "test-request-id")
 	os.Setenv("GREETING", "Custom greeting")
 	defer func() {
 		if originalFunctionName != "" {
 			os.Setenv("AWS_LAMBDA_FUNCTION_NAME", originalFunctionName)
 		} else {
 			os.Unsetenv("AWS_LAMBDA_FUNCTION_NAME")
-		}
-		if originalRequestID != "" {
-			os.Setenv("AWS_LAMBDA_REQUEST_ID", originalRequestID)
-		} else {
-			os.Unsetenv("AWS_LAMBDA_REQUEST_ID")
 		}
 		if originalGreeting != "" {
 			os.Setenv("GREETING", originalGreeting)
@@ -86,7 +79,12 @@ func TestHandlerWithCustomGreeting(t *testing.T) {
 		}
 	}()
 
-	ctx := context.Background()
+	// Create a context with Lambda context containing request ID
+	lc := &lambdacontext.LambdaContext{
+		AwsRequestID: "test-request-id",
+	}
+	ctx := lambdacontext.NewContext(context.Background(), lc)
+
 	event := map[string]interface{}{}
 
 	response, err := Handler(ctx, event)
