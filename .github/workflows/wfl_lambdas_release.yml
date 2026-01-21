@@ -181,7 +181,6 @@ jobs:
             fi
           fi
           echo "lambdas=$LAMBDAS" >> $GITHUB_OUTPUT
-          echo "Debug: Go lambdas detected: $LAMBDAS" >> $GITHUB_STEP_SUMMARY || true
 
   validate-manual-inputs:
     name: Validate Manual Inputs
