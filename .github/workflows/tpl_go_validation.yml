@@ -60,7 +60,7 @@ jobs:
         with:
           version: v2.7
           working-directory: ${{ inputs.lambda_path }}
-          args: --timeout 4m --config ${{ github.workspace }}/lambdas/go/.golangci.yaml
+          args: --timeout 4m --config ../.golangci.yaml
           only-new-issues: false
 
       - name: Run tests
