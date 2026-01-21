@@ -221,8 +221,8 @@ jobs:
     name: Deploy Python Lambda - ${{ matrix.lambda }} to ${{ needs.determine-environment.outputs.environment }}
     needs: [determine-environment, detect-changes, validate-manual-inputs]
     if: |
-      (needs.detect-changes.outputs.python-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && length(fromJSON(needs.detect-changes.outputs.python-lambdas)) > 0) ||
-      (needs.determine-environment.outputs.is_manual == 'true' && length(fromJSON(needs.detect-changes.outputs.python-lambdas)) > 0)
+      (needs.detect-changes.outputs.python-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && fromJSON(needs.detect-changes.outputs.python-lambdas) != fromJSON('[]')) ||
+      (needs.determine-environment.outputs.is_manual == 'true' && fromJSON(needs.detect-changes.outputs.python-lambdas) != fromJSON('[]'))
     permissions:
       id-token: write
       contents: read
@@ -242,8 +242,8 @@ jobs:
     name: Deploy JavaScript Lambda - ${{ matrix.lambda }} to ${{ needs.determine-environment.outputs.environment }}
     needs: [determine-environment, detect-changes, validate-manual-inputs]
     if: |
-      (needs.detect-changes.outputs.javascript-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && length(fromJSON(needs.detect-changes.outputs.js-lambdas)) > 0) ||
-      (needs.determine-environment.outputs.is_manual == 'true' && length(fromJSON(needs.detect-changes.outputs.js-lambdas)) > 0)
+      (needs.detect-changes.outputs.javascript-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && fromJSON(needs.detect-changes.outputs.js-lambdas) != fromJSON('[]')) ||
+      (needs.determine-environment.outputs.is_manual == 'true' && fromJSON(needs.detect-changes.outputs.js-lambdas) != fromJSON('[]'))
     permissions:
       id-token: write
       contents: read
@@ -263,8 +263,8 @@ jobs:
     name: Deploy Go Lambda - ${{ matrix.lambda }} to ${{ needs.determine-environment.outputs.environment }}
     needs: [determine-environment, detect-changes, validate-manual-inputs]
     if: |
-      (needs.detect-changes.outputs.go-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && length(fromJSON(needs.detect-changes.outputs.go-lambdas)) > 0) ||
-      (needs.determine-environment.outputs.is_manual == 'true' && length(fromJSON(needs.detect-changes.outputs.go-lambdas)) > 0)
+      (needs.detect-changes.outputs.go-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && fromJSON(needs.detect-changes.outputs.go-lambdas) != fromJSON('[]')) ||
+      (needs.determine-environment.outputs.is_manual == 'true' && fromJSON(needs.detect-changes.outputs.go-lambdas) != fromJSON('[]'))
     permissions:
       id-token: write
       contents: read
