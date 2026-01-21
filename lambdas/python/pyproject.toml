@@ -16,7 +16,8 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "A", "C4", "DTZ", "T10", "EM", "IS
 ignore = []
 
 [tool.pytest.ini_options]
-testpaths = ["."]
+# testpaths is intentionally omitted - pytest will use current directory by default
+# This ensures tests only run for the specific lambda being validated
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
