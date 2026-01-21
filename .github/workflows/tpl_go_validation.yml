@@ -59,8 +59,7 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.7
-          working-directory: ${{ inputs.lambda_path }}
-          args: --timeout 4m --config ../.golangci.yaml
+          args: --timeout 4m --config lambdas/go/.golangci.yaml ./${{ inputs.lambda_path }}/...
           only-new-issues: false
 
       - name: Run tests
