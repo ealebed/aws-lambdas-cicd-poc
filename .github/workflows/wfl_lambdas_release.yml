@@ -95,9 +95,16 @@ jobs:
             fi
           else
             if [ "${{ steps.filter.outputs.python }}" == "true" ]; then
-              CHANGED=$(git diff --name-only HEAD~1...HEAD | grep '^lambdas/python/' || true)
+              # Use github.event.before if available (push event), otherwise fall back to HEAD~1
+              if [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+                CHANGED=$(git diff --name-only ${{ github.event.before }}...${{ github.sha }} | grep '^lambdas/python/' || true)
+              else
+                CHANGED=$(git diff --name-only HEAD~1...HEAD | grep '^lambdas/python/' || true)
+              fi
               if [ -n "$CHANGED" ]; then
-                LAMBDAS=$(echo "$CHANGED" | sed 's|^lambdas/python/||' | cut -d'/' -f1 | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '[]')
+                # Extract lambda directory names, filtering out files in lambdas/python/ root
+                # Only include paths that have at least one directory component after lambdas/python/
+                LAMBDAS=$(echo "$CHANGED" | sed 's|^lambdas/python/||' | grep '/' | cut -d'/' -f1 | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '[]')
               else
                 LAMBDAS="[]"
               fi
@@ -122,9 +129,16 @@ jobs:
             fi
           else
             if [ "${{ steps.filter.outputs.javascript }}" == "true" ]; then
-              CHANGED=$(git diff --name-only HEAD~1...HEAD | grep '^lambdas/javascript/' || true)
+              # Use github.event.before if available (push event), otherwise fall back to HEAD~1
+              if [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+                CHANGED=$(git diff --name-only ${{ github.event.before }}...${{ github.sha }} | grep '^lambdas/javascript/' || true)
+              else
+                CHANGED=$(git diff --name-only HEAD~1...HEAD | grep '^lambdas/javascript/' || true)
+              fi
               if [ -n "$CHANGED" ]; then
-                LAMBDAS=$(echo "$CHANGED" | sed 's|^lambdas/javascript/||' | cut -d'/' -f1 | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '[]')
+                # Extract lambda directory names, filtering out files in lambdas/javascript/ root
+                # Only include paths that have at least one directory component after lambdas/javascript/
+                LAMBDAS=$(echo "$CHANGED" | sed 's|^lambdas/javascript/||' | grep '/' | cut -d'/' -f1 | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '[]')
               else
                 LAMBDAS="[]"
               fi
@@ -149,9 +163,16 @@ jobs:
             fi
           else
             if [ "${{ steps.filter.outputs.go }}" == "true" ]; then
-              CHANGED=$(git diff --name-only HEAD~1...HEAD | grep '^lambdas/go/' || true)
+              # Use github.event.before if available (push event), otherwise fall back to HEAD~1
+              if [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+                CHANGED=$(git diff --name-only ${{ github.event.before }}...${{ github.sha }} | grep '^lambdas/go/' || true)
+              else
+                CHANGED=$(git diff --name-only HEAD~1...HEAD | grep '^lambdas/go/' || true)
+              fi
               if [ -n "$CHANGED" ]; then
-                LAMBDAS=$(echo "$CHANGED" | sed 's|^lambdas/go/||' | cut -d'/' -f1 | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '[]')
+                # Extract lambda directory names, filtering out files in lambdas/go/ root (like .golangci.yaml)
+                # Only include paths that have at least one directory component after lambdas/go/
+                LAMBDAS=$(echo "$CHANGED" | sed 's|^lambdas/go/||' | grep '/' | cut -d'/' -f1 | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '[]')
               else
                 LAMBDAS="[]"
               fi
@@ -160,6 +181,7 @@ jobs:
             fi
           fi
           echo "lambdas=$LAMBDAS" >> $GITHUB_OUTPUT
+          echo "Debug: Go lambdas detected: $LAMBDAS" >> $GITHUB_STEP_SUMMARY || true
 
   validate-manual-inputs:
     name: Validate Manual Inputs
