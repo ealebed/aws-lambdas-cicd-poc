@@ -75,6 +75,9 @@ jobs:
     name: Validate Python Lambda - ${{ matrix.lambda }}
     needs: detect-changes
     if: needs.detect-changes.outputs.python-changed == 'true' && needs.detect-changes.outputs.python-lambdas != '[]'
+    permissions:
+      contents: read
+      pull-requests: write
     uses: ./.github/workflows/tpl_python_validation.yml
     strategy:
       matrix:
@@ -87,6 +90,9 @@ jobs:
     name: Validate JavaScript Lambda - ${{ matrix.lambda }}
     needs: detect-changes
     if: needs.detect-changes.outputs.javascript-changed == 'true' && needs.detect-changes.outputs.js-lambdas != '[]'
+    permissions:
+      contents: read
+      pull-requests: write
     uses: ./.github/workflows/tpl_javascript_validation.yml
     strategy:
       matrix:
@@ -99,6 +105,9 @@ jobs:
     name: Validate Go Lambda - ${{ matrix.lambda }}
     needs: detect-changes
     if: needs.detect-changes.outputs.go-changed == 'true' && needs.detect-changes.outputs.go-lambdas != '[]'
+    permissions:
+      contents: read
+      pull-requests: write
     uses: ./.github/workflows/tpl_go_validation.yml
     strategy:
       matrix:

@@ -191,6 +191,9 @@ jobs:
     if: |
       (needs.detect-changes.outputs.python-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && needs.detect-changes.outputs.python-lambdas != '[]') ||
       (needs.determine-environment.outputs.is_manual == 'true' && needs.detect-changes.outputs.python-lambdas != '[]')
+    permissions:
+      id-token: write
+      contents: read
     uses: ./.github/workflows/tpl_python_deploy.yml
     strategy:
       matrix:
@@ -209,6 +212,9 @@ jobs:
     if: |
       (needs.detect-changes.outputs.javascript-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && needs.detect-changes.outputs.js-lambdas != '[]') ||
       (needs.determine-environment.outputs.is_manual == 'true' && needs.detect-changes.outputs.js-lambdas != '[]')
+    permissions:
+      id-token: write
+      contents: read
     uses: ./.github/workflows/tpl_javascript_deploy.yml
     strategy:
       matrix:
@@ -227,6 +233,9 @@ jobs:
     if: |
       (needs.detect-changes.outputs.go-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && needs.detect-changes.outputs.go-lambdas != '[]') ||
       (needs.determine-environment.outputs.is_manual == 'true' && needs.detect-changes.outputs.go-lambdas != '[]')
+    permissions:
+      id-token: write
+      contents: read
     uses: ./.github/workflows/tpl_go_deploy.yml
     strategy:
       matrix:

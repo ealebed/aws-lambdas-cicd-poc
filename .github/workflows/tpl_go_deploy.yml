@@ -44,7 +44,7 @@ jobs:
           fi
 
       - name: Login to AWS
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: GitHubActionsSession-${{ inputs.environment }}-${{ inputs.lambda_name }}
@@ -72,7 +72,7 @@ jobs:
           ecr: auto
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: '1.25.0'
 
