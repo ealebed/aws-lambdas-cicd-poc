@@ -176,7 +176,7 @@ jobs:
                 EXTRACTED=$(echo "$CHANGED" | sed 's|^lambdas/go/||' | grep '/' | cut -d'/' -f1 | sort -u | grep -v '^$' || true)
                 echo "Debug: Extracted directories (before jq): $EXTRACTED" >> $GITHUB_STEP_SUMMARY || true
                 if [ -n "$EXTRACTED" ]; then
-                  LAMBDAS=$(echo "$EXTRACTED" | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '[]')
+                  LAMBDAS=$(echo "$EXTRACTED" | jq -R -s -c 'split("\n") | map(select(. != ""))' | tr -d '\n' || echo '[]')
                 else
                   LAMBDAS="[]"
                 fi
@@ -221,8 +221,8 @@ jobs:
     name: Deploy Python Lambda - ${{ matrix.lambda }} to ${{ needs.determine-environment.outputs.environment }}
     needs: [determine-environment, detect-changes, validate-manual-inputs]
     if: |
-      (needs.detect-changes.outputs.python-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && fromJSON(needs.detect-changes.outputs.python-lambdas) != fromJSON('[]')) ||
-      (needs.determine-environment.outputs.is_manual == 'true' && fromJSON(needs.detect-changes.outputs.python-lambdas) != fromJSON('[]'))
+      (needs.detect-changes.outputs.python-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && needs.detect-changes.outputs.python-lambdas != '[]') ||
+      (needs.determine-environment.outputs.is_manual == 'true' && needs.detect-changes.outputs.python-lambdas != '[]')
     permissions:
       id-token: write
       contents: read
@@ -242,8 +242,8 @@ jobs:
     name: Deploy JavaScript Lambda - ${{ matrix.lambda }} to ${{ needs.determine-environment.outputs.environment }}
     needs: [determine-environment, detect-changes, validate-manual-inputs]
     if: |
-      (needs.detect-changes.outputs.javascript-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && fromJSON(needs.detect-changes.outputs.js-lambdas) != fromJSON('[]')) ||
-      (needs.determine-environment.outputs.is_manual == 'true' && fromJSON(needs.detect-changes.outputs.js-lambdas) != fromJSON('[]'))
+      (needs.detect-changes.outputs.javascript-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && needs.detect-changes.outputs.js-lambdas != '[]') ||
+      (needs.determine-environment.outputs.is_manual == 'true' && needs.detect-changes.outputs.js-lambdas != '[]')
     permissions:
       id-token: write
       contents: read
@@ -263,8 +263,8 @@ jobs:
     name: Deploy Go Lambda - ${{ matrix.lambda }} to ${{ needs.determine-environment.outputs.environment }}
     needs: [determine-environment, detect-changes, validate-manual-inputs]
     if: |
-      (needs.detect-changes.outputs.go-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && fromJSON(needs.detect-changes.outputs.go-lambdas) != fromJSON('[]')) ||
-      (needs.determine-environment.outputs.is_manual == 'true' && fromJSON(needs.detect-changes.outputs.go-lambdas) != fromJSON('[]'))
+      (needs.detect-changes.outputs.go-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && needs.detect-changes.outputs.go-lambdas != '[]') ||
+      (needs.determine-environment.outputs.is_manual == 'true' && needs.detect-changes.outputs.go-lambdas != '[]')
     permissions:
       id-token: write
       contents: read
