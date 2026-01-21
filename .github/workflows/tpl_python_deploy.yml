@@ -206,7 +206,17 @@ jobs:
             --arg language "$LANGUAGE" \
             --arg service "$SERVICE" \
             '{Environment:$env, Region:$region, Version:$version, Language:$language, Service:$service}')
-          MERGED=$(jq -c -s 'reduce .[] as $item ({}; . * $item)' <(echo "$DEFAULT_TAGS") <(echo "${CONFIG_TAGS:-{}}"))
+
+          # Parse CONFIG_TAGS, defaulting to {} if empty or invalid
+          if [ -z "$CONFIG_TAGS" ] || [ "$CONFIG_TAGS" = "null" ]; then
+            CONFIG_TAGS_JSON="{}"
+          else
+            # Validate and parse CONFIG_TAGS JSON
+            CONFIG_TAGS_JSON=$(echo "$CONFIG_TAGS" | jq -c '.' 2>/dev/null || echo "{}")
+          fi
+
+          # Merge default tags with config tags
+          MERGED=$(jq -c -s 'reduce .[] as $item ({}; . * $item)' <(echo "$DEFAULT_TAGS") <(echo "$CONFIG_TAGS_JSON"))
           echo "tags=$MERGED" >> $GITHUB_OUTPUT
 
       - name: Deploy Lambda (image)
