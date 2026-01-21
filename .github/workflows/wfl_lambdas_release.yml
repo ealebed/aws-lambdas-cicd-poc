@@ -191,7 +191,6 @@ jobs:
             fi
           fi
           echo "lambdas=$LAMBDAS" >> $GITHUB_OUTPUT
-          echo "Final output: go-lambdas=$LAMBDAS" >> $GITHUB_STEP_SUMMARY || true
 
   validate-manual-inputs:
     name: Validate Manual Inputs
@@ -220,9 +219,7 @@ jobs:
   deploy-python:
     name: Deploy Python Lambda - ${{ matrix.lambda }} to ${{ needs.determine-environment.outputs.environment }}
     needs: [determine-environment, detect-changes, validate-manual-inputs]
-    if: |
-      (needs.detect-changes.outputs.python-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && needs.detect-changes.outputs.python-lambdas != '[]') ||
-      (needs.determine-environment.outputs.is_manual == 'true' && needs.detect-changes.outputs.python-lambdas != '[]')
+    if: needs.detect-changes.outputs.python-lambdas != '[]' && (needs.detect-changes.outputs.python-changed == 'true' || needs.determine-environment.outputs.is_manual == 'true')
     permissions:
       id-token: write
       contents: read
@@ -241,9 +238,7 @@ jobs:
   deploy-javascript:
     name: Deploy JavaScript Lambda - ${{ matrix.lambda }} to ${{ needs.determine-environment.outputs.environment }}
     needs: [determine-environment, detect-changes, validate-manual-inputs]
-    if: |
-      (needs.detect-changes.outputs.javascript-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && needs.detect-changes.outputs.js-lambdas != '[]') ||
-      (needs.determine-environment.outputs.is_manual == 'true' && needs.detect-changes.outputs.js-lambdas != '[]')
+    if: needs.detect-changes.outputs.js-lambdas != '[]' && (needs.detect-changes.outputs.javascript-changed == 'true' || needs.determine-environment.outputs.is_manual == 'true')
     permissions:
       id-token: write
       contents: read
@@ -262,9 +257,7 @@ jobs:
   deploy-go:
     name: Deploy Go Lambda - ${{ matrix.lambda }} to ${{ needs.determine-environment.outputs.environment }}
     needs: [determine-environment, detect-changes, validate-manual-inputs]
-    if: |
-      (needs.detect-changes.outputs.go-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && needs.detect-changes.outputs.go-lambdas != '[]') ||
-      (needs.determine-environment.outputs.is_manual == 'true' && needs.detect-changes.outputs.go-lambdas != '[]')
+    if: needs.detect-changes.outputs.go-lambdas != '[]' && (needs.detect-changes.outputs.go-changed == 'true' || needs.determine-environment.outputs.is_manual == 'true')
     permissions:
       id-token: write
       contents: read
