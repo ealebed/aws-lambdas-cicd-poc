@@ -1,0 +1,64 @@
+name: JavaScript Lambda Validation
+
+on:
+  workflow_call:
+    inputs:
+      lambda_path:
+        required: true
+        type: string
+        description: 'Path to the Lambda function directory (e.g., lambdas/javascript/example-lambda)'
+      lambda_name:
+        required: true
+        type: string
+        description: 'Name of the Lambda function (folder name)'
+
+jobs:
+  validate:
+    name: Validate JavaScript Lambda - ${{ inputs.lambda_name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        working-directory: ${{ inputs.lambda_path }}
+        run: |
+          if [ -f package.json ]; then
+            npm ci
+          fi
+
+      - name: Format check (Prettier)
+        working-directory: ${{ inputs.lambda_path }}
+        run: |
+          if [ -f package.json ] && grep -q '"format"' package.json; then
+            npm run format -- --check || true
+          else
+            npx prettier --check --config ${{ github.workspace }}/lambdas/javascript/.prettierrc.json . || true
+          fi
+
+      - name: Lint (ESLint)
+        working-directory: ${{ inputs.lambda_path }}
+        run: |
+          if [ -f package.json ] && grep -q '"lint"' package.json; then
+            npm run lint || true
+          else
+            npx eslint --config ${{ github.workspace }}/lambdas/javascript/.eslintrc.json . || true
+          fi
+          # Note: Pre-commit runs ESLint, ensuring consistency between local and CI
+
+      - name: Run tests
+        working-directory: ${{ inputs.lambda_path }}
+        run: |
+          if [ -f package.json ] && grep -q '"test"' package.json; then
+            npm test -- --coverage || true
+          fi

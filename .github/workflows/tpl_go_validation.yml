@@ -1,0 +1,69 @@
+name: Go Lambda Validation
+
+on:
+  workflow_call:
+    inputs:
+      lambda_path:
+        required: true
+        type: string
+        description: 'Path to the Lambda function directory (e.g., lambdas/go/example-lambda)'
+      lambda_name:
+        required: true
+        type: string
+        description: 'Name of the Lambda function (folder name)'
+
+jobs:
+  validate:
+    name: Validate Go Lambda - ${{ inputs.lambda_name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.0'
+
+      - name: Run go fmt check
+        working-directory: ${{ inputs.lambda_path }}
+        run: |
+          fmt_out=$(gofmt -s -l .)
+          if [ -n "$fmt_out" ]; then
+            echo "::error::run gofmt -s on these files:"
+            echo "$fmt_out"
+            exit 1
+          fi
+
+      - name: Run go vet
+        working-directory: ${{ inputs.lambda_path }}
+        run: |
+          go vet ./...
+
+      - name: Check go mod tidy
+        working-directory: ${{ inputs.lambda_path }}
+        run: |
+          go mod tidy
+          if [ -n "$(git diff --name-only)" ]; then
+            echo "::error::go.mod or go.sum changed after 'go mod tidy'. Please run 'go mod tidy' and commit the changes."
+            git diff
+            exit 1
+          fi
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.7
+          working-directory: ${{ inputs.lambda_path }}
+          args: --timeout 4m --config ${{ github.workspace }}/lambdas/go/.golangci.yaml
+          only-new-issues: false
+
+      - name: Run tests
+        working-directory: ${{ inputs.lambda_path }}
+        run: |
+          go test ./... -race -coverprofile=coverage.out -covermode=atomic

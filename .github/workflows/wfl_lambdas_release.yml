@@ -1,0 +1,240 @@
+name: Lambdas Release
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      environment:
+        required: true
+        type: choice
+        options:
+          - dev
+          - test
+          - prod
+        description: 'Target environment'
+        default: dev
+      language:
+        required: false
+        type: choice
+        options:
+          - all
+          - python
+          - javascript
+          - go
+        description: 'Lambda language (all = deploy all changed lambdas)'
+        default: all
+      lambda_name:
+        required: false
+        type: string
+        description: 'Specific Lambda function name (folder name). Required if language is not "all"'
+
+jobs:
+  determine-environment:
+    name: Determine Environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      is_manual: ${{ steps.env.outputs.is_manual }}
+    steps:
+      - name: Determine environment
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "environment=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+            echo "is_manual=true" >> $GITHUB_OUTPUT
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+            echo "is_manual=false" >> $GITHUB_OUTPUT
+          fi
+
+  detect-changes:
+    name: Detect Changed Lambdas
+    runs-on: ubuntu-latest
+    needs: determine-environment
+    timeout-minutes: 15
+    outputs:
+      python-changed: ${{ steps.filter.outputs.python }}
+      javascript-changed: ${{ steps.filter.outputs.javascript }}
+      go-changed: ${{ steps.filter.outputs.go }}
+      python-lambdas: ${{ steps.python-lambdas.outputs.lambdas }}
+      js-lambdas: ${{ steps.js-lambdas.outputs.lambdas }}
+      go-lambdas: ${{ steps.go-lambdas.outputs.lambdas }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed Lambda functions
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            python:
+              - 'lambdas/python/**'
+            javascript:
+              - 'lambdas/javascript/**'
+            go:
+              - 'lambdas/go/**'
+
+      - name: Find changed Python Lambdas
+        id: python-lambdas
+        run: |
+          if [ "${{ needs.determine-environment.outputs.is_manual }}" == "true" ]; then
+            if [ "${{ inputs.language }}" == "all" ] || [ "${{ inputs.language }}" == "python" ]; then
+              if [ -n "${{ inputs.lambda_name }}" ]; then
+                LAMBDAS="[\"${{ inputs.lambda_name }}\"]"
+              else
+                LAMBDAS=$(find lambdas/python -mindepth 1 -maxdepth 1 -type d ! -name ".*" -exec basename {} \; | jq -R -s -c 'split("\n") | map(select(. != ""))')
+              fi
+            else
+              LAMBDAS="[]"
+            fi
+          else
+            if [ "${{ steps.filter.outputs.python }}" == "true" ]; then
+              CHANGED=$(git diff --name-only HEAD~1...HEAD | grep '^lambdas/python/' || true)
+              if [ -n "$CHANGED" ]; then
+                LAMBDAS=$(echo "$CHANGED" | sed 's|^lambdas/python/||' | cut -d'/' -f1 | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '[]')
+              else
+                LAMBDAS="[]"
+              fi
+            else
+              LAMBDAS="[]"
+            fi
+          fi
+          echo "lambdas=$LAMBDAS" >> $GITHUB_OUTPUT
+
+      - name: Find changed JavaScript Lambdas
+        id: js-lambdas
+        run: |
+          if [ "${{ needs.determine-environment.outputs.is_manual }}" == "true" ]; then
+            if [ "${{ inputs.language }}" == "all" ] || [ "${{ inputs.language }}" == "javascript" ]; then
+              if [ -n "${{ inputs.lambda_name }}" ]; then
+                LAMBDAS="[\"${{ inputs.lambda_name }}\"]"
+              else
+                LAMBDAS=$(find lambdas/javascript -mindepth 1 -maxdepth 1 -type d ! -name ".*" -exec basename {} \; | jq -R -s -c 'split("\n") | map(select(. != ""))')
+              fi
+            else
+              LAMBDAS="[]"
+            fi
+          else
+            if [ "${{ steps.filter.outputs.javascript }}" == "true" ]; then
+              CHANGED=$(git diff --name-only HEAD~1...HEAD | grep '^lambdas/javascript/' || true)
+              if [ -n "$CHANGED" ]; then
+                LAMBDAS=$(echo "$CHANGED" | sed 's|^lambdas/javascript/||' | cut -d'/' -f1 | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '[]')
+              else
+                LAMBDAS="[]"
+              fi
+            else
+              LAMBDAS="[]"
+            fi
+          fi
+          echo "lambdas=$LAMBDAS" >> $GITHUB_OUTPUT
+
+      - name: Find changed Go Lambdas
+        id: go-lambdas
+        run: |
+          if [ "${{ needs.determine-environment.outputs.is_manual }}" == "true" ]; then
+            if [ "${{ inputs.language }}" == "all" ] || [ "${{ inputs.language }}" == "go" ]; then
+              if [ -n "${{ inputs.lambda_name }}" ]; then
+                LAMBDAS="[\"${{ inputs.lambda_name }}\"]"
+              else
+                LAMBDAS=$(find lambdas/go -mindepth 1 -maxdepth 1 -type d ! -name ".*" -exec basename {} \; | jq -R -s -c 'split("\n") | map(select(. != ""))')
+              fi
+            else
+              LAMBDAS="[]"
+            fi
+          else
+            if [ "${{ steps.filter.outputs.go }}" == "true" ]; then
+              CHANGED=$(git diff --name-only HEAD~1...HEAD | grep '^lambdas/go/' || true)
+              if [ -n "$CHANGED" ]; then
+                LAMBDAS=$(echo "$CHANGED" | sed 's|^lambdas/go/||' | cut -d'/' -f1 | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '[]')
+              else
+                LAMBDAS="[]"
+              fi
+            else
+              LAMBDAS="[]"
+            fi
+          fi
+          echo "lambdas=$LAMBDAS" >> $GITHUB_OUTPUT
+
+  validate-manual-inputs:
+    name: Validate Manual Inputs
+    runs-on: ubuntu-latest
+    needs: determine-environment
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Validate inputs
+        run: |
+          if [ "${{ inputs.language }}" != "all" ] && [ -z "${{ inputs.lambda_name }}" ]; then
+            echo "::error::lambda_name is required when language is not 'all'"
+            exit 1
+          fi
+          if [ "${{ inputs.language }}" != "all" ]; then
+            LAMBDA_PATH="lambdas/${{ inputs.language }}/${{ inputs.lambda_name }}"
+            if [ ! -d "$LAMBDA_PATH" ]; then
+              echo "::error::Lambda function not found at $LAMBDA_PATH"
+              exit 1
+            fi
+          fi
+
+  deploy-python:
+    name: Deploy Python Lambda - ${{ matrix.lambda }} to ${{ needs.determine-environment.outputs.environment }}
+    needs: [determine-environment, detect-changes, validate-manual-inputs]
+    if: |
+      (needs.detect-changes.outputs.python-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && needs.detect-changes.outputs.python-lambdas != '[]') ||
+      (needs.determine-environment.outputs.is_manual == 'true' && needs.detect-changes.outputs.python-lambdas != '[]')
+    uses: ./.github/workflows/tpl_python_deploy.yml
+    strategy:
+      matrix:
+        lambda: ${{ fromJson(needs.detect-changes.outputs.python-lambdas) }}
+    with:
+      lambda_path: lambdas/python/${{ matrix.lambda }}
+      lambda_name: ${{ matrix.lambda }}
+      environment: ${{ needs.determine-environment.outputs.environment }}
+    secrets:
+      # arn:aws:iam::531438381462:role/github-oidc-terraform
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+
+  deploy-javascript:
+    name: Deploy JavaScript Lambda - ${{ matrix.lambda }} to ${{ needs.determine-environment.outputs.environment }}
+    needs: [determine-environment, detect-changes, validate-manual-inputs]
+    if: |
+      (needs.detect-changes.outputs.javascript-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && needs.detect-changes.outputs.js-lambdas != '[]') ||
+      (needs.determine-environment.outputs.is_manual == 'true' && needs.detect-changes.outputs.js-lambdas != '[]')
+    uses: ./.github/workflows/tpl_javascript_deploy.yml
+    strategy:
+      matrix:
+        lambda: ${{ fromJson(needs.detect-changes.outputs.js-lambdas) }}
+    with:
+      lambda_path: lambdas/javascript/${{ matrix.lambda }}
+      lambda_name: ${{ matrix.lambda }}
+      environment: ${{ needs.determine-environment.outputs.environment }}
+    secrets:
+      # arn:aws:iam::531438381462:role/github-oidc-terraform
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+
+  deploy-go:
+    name: Deploy Go Lambda - ${{ matrix.lambda }} to ${{ needs.determine-environment.outputs.environment }}
+    needs: [determine-environment, detect-changes, validate-manual-inputs]
+    if: |
+      (needs.detect-changes.outputs.go-changed == 'true' && needs.determine-environment.outputs.is_manual == 'false' && needs.detect-changes.outputs.go-lambdas != '[]') ||
+      (needs.determine-environment.outputs.is_manual == 'true' && needs.detect-changes.outputs.go-lambdas != '[]')
+    uses: ./.github/workflows/tpl_go_deploy.yml
+    strategy:
+      matrix:
+        lambda: ${{ fromJson(needs.detect-changes.outputs.go-lambdas) }}
+    with:
+      lambda_path: lambdas/go/${{ matrix.lambda }}
+      lambda_name: ${{ matrix.lambda }}
+      environment: ${{ needs.determine-environment.outputs.environment }}
+    secrets:
+      # arn:aws:iam::531438381462:role/github-oidc-terraform
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}

@@ -1,0 +1,236 @@
+name: JavaScript Lambda Deploy
+
+on:
+  workflow_call:
+    inputs:
+      lambda_path:
+        required: true
+        type: string
+        description: 'Path to the Lambda function directory (e.g., lambdas/javascript/example-lambda)'
+      lambda_name:
+        required: true
+        type: string
+        description: 'Name of the Lambda function (folder name)'
+      environment:
+        required: true
+        type: string
+    secrets:
+      AWS_ROLE_ARN:
+        required: true
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy JavaScript Lambda - ${{ inputs.lambda_name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ inputs.environment }}
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Decide on tag
+        id: set-tag
+        run: |
+          TIMESTAMP=$(date -u +'%Y.%m.%d-%H.%M')
+          BRANCH="${{ github.event.inputs.branch || github.ref_name }}"
+          if [[ "${BRANCH}" == "master" ]]; then
+            echo "TAG=${TIMESTAMP}" >> $GITHUB_OUTPUT
+          else
+            echo "TAG=${TIMESTAMP}-SNAPSHOT" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Login to AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActionsSession-${{ inputs.environment }}-${{ inputs.lambda_name }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Determine ECR repository
+        id: ecr-repo
+        run: |
+          ECR_REPO="lambda-${{ inputs.lambda_name }}-${{ inputs.environment }}"
+          echo "repository=$ECR_REPO" >> $GITHUB_OUTPUT
+          echo "registry=${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com" >> $GITHUB_OUTPUT
+
+      - name: Ensure ECR repository exists
+        run: |
+          aws ecr describe-repositories --repository-names ${{ steps.ecr-repo.outputs.repository }} --region ${{ vars.AWS_REGION }} || \
+          aws ecr create-repository --repository-name ${{ steps.ecr-repo.outputs.repository }} --region ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ steps.ecr-repo.outputs.registry }}
+          ecr: auto
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.lambda_path }}
+          file: ${{ inputs.lambda_path }}/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.ecr-repo.outputs.registry }}/${{ steps.ecr-repo.outputs.repository }}:${{ steps.set-tag.outputs.TAG }}
+            ${{ steps.ecr-repo.outputs.registry }}/${{ steps.ecr-repo.outputs.repository }}:latest
+          cache-from: type=registry,ref=${{ steps.ecr-repo.outputs.registry }}/${{ steps.ecr-repo.outputs.repository }}:buildcache
+          cache-to: type=registry,ref=${{ steps.ecr-repo.outputs.registry }}/${{ steps.ecr-repo.outputs.repository }}:buildcache,mode=max
+
+      - name: Capture image URI
+        id: image-uri
+        run: |
+          echo "uri=${{ steps.ecr-repo.outputs.registry }}/${{ steps.ecr-repo.outputs.repository }}:${{ steps.set-tag.outputs.TAG }}" >> $GITHUB_OUTPUT
+
+      - name: Parse Lambda configuration
+        id: lambda-config
+        working-directory: ${{ inputs.lambda_path }}
+        run: |
+          if [ -f lambda-config.yaml ]; then
+            if ! command -v yq &> /dev/null; then
+              wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+              chmod +x /usr/local/bin/yq
+            fi
+            if ! command -v jq &> /dev/null; then
+              sudo apt-get update && sudo apt-get install -y jq
+            fi
+
+            # Basic configuration
+            FUNCTION_NAME=$(yq eval '.lambda.name // "${{ inputs.lambda_name }}"' lambda-config.yaml)
+            DESCRIPTION=$(yq eval '.lambda.description // ""' lambda-config.yaml)
+            MEMORY_SIZE=$(yq eval '.lambda.memory_size // 256' lambda-config.yaml)
+            TIMEOUT=$(yq eval '.lambda.timeout // 30' lambda-config.yaml)
+            EPHEMERAL_STORAGE=$(yq eval '.lambda.ephemeral_storage // 512' lambda-config.yaml)
+            ARCHITECTURES=$(yq eval '.lambda.architectures // "x86_64"' lambda-config.yaml)
+            PUBLISH=$(yq eval '.lambda.publish // true' lambda-config.yaml)
+
+            echo "function_name=$FUNCTION_NAME" >> $GITHUB_OUTPUT
+            echo "description=$DESCRIPTION" >> $GITHUB_OUTPUT
+            echo "memory_size=$MEMORY_SIZE" >> $GITHUB_OUTPUT
+            echo "timeout=$TIMEOUT" >> $GITHUB_OUTPUT
+            echo "ephemeral_storage=$EPHEMERAL_STORAGE" >> $GITHUB_OUTPUT
+            echo "architectures=$ARCHITECTURES" >> $GITHUB_OUTPUT
+            echo "publish=$PUBLISH" >> $GITHUB_OUTPUT
+
+            # Environment variables
+            ENV_VARS=$(yq eval -o=json '.lambda.environment.variables // {}' lambda-config.yaml 2>/dev/null || echo '{}')
+            echo "env_vars=$(echo "$ENV_VARS" | jq -c '.')" >> $GITHUB_OUTPUT
+
+            # Tags
+            TAGS=$(yq eval -o=json '.lambda.tags // {}' lambda-config.yaml 2>/dev/null || echo '{}')
+            echo "config_tags=$(echo "$TAGS" | jq -c '.')" >> $GITHUB_OUTPUT
+
+            # Optional configurations (as JSON strings)
+            VPC_CONFIG=$(yq eval -o=json '.lambda.vpc_config // null' lambda-config.yaml 2>/dev/null || echo 'null')
+            if [ "$VPC_CONFIG" != "null" ] && [ "$VPC_CONFIG" != "{}" ]; then
+              echo "vpc_config=$(echo "$VPC_CONFIG" | jq -c '.')" >> $GITHUB_OUTPUT
+            fi
+
+            DEAD_LETTER_CONFIG=$(yq eval -o=json '.lambda.dead_letter_config // null' lambda-config.yaml 2>/dev/null || echo 'null')
+            if [ "$DEAD_LETTER_CONFIG" != "null" ] && [ "$DEAD_LETTER_CONFIG" != "{}" ]; then
+              echo "dead_letter_config=$(echo "$DEAD_LETTER_CONFIG" | jq -c '.')" >> $GITHUB_OUTPUT
+            fi
+
+            KMS_KEY_ARN=$(yq eval '.lambda.kms_key_arn // ""' lambda-config.yaml)
+            if [ -n "$KMS_KEY_ARN" ]; then
+              echo "kms_key_arn=$KMS_KEY_ARN" >> $GITHUB_OUTPUT
+            fi
+
+            TRACING_CONFIG=$(yq eval -o=json '.lambda.tracing_config // null' lambda-config.yaml 2>/dev/null || echo 'null')
+            if [ "$TRACING_CONFIG" != "null" ] && [ "$TRACING_CONFIG" != "{}" ]; then
+              echo "tracing_config=$(echo "$TRACING_CONFIG" | jq -c '.')" >> $GITHUB_OUTPUT
+            fi
+
+            FILE_SYSTEM_CONFIGS=$(yq eval -o=json '.lambda.file_system_configs // null' lambda-config.yaml 2>/dev/null || echo 'null')
+            if [ "$FILE_SYSTEM_CONFIGS" != "null" ] && [ "$FILE_SYSTEM_CONFIGS" != "[]" ]; then
+              echo "file_system_configs=$(echo "$FILE_SYSTEM_CONFIGS" | jq -c '.')" >> $GITHUB_OUTPUT
+            fi
+
+            IMAGE_CONFIG=$(yq eval -o=json '.lambda.image_config // null' lambda-config.yaml 2>/dev/null || echo 'null')
+            if [ "$IMAGE_CONFIG" != "null" ] && [ "$IMAGE_CONFIG" != "{}" ]; then
+              echo "image_config=$(echo "$IMAGE_CONFIG" | jq -c '.')" >> $GITHUB_OUTPUT
+            fi
+
+            SNAP_START=$(yq eval -o=json '.lambda.snap_start // null' lambda-config.yaml 2>/dev/null || echo 'null')
+            if [ "$SNAP_START" != "null" ] && [ "$SNAP_START" != "{}" ]; then
+              echo "snap_start=$(echo "$SNAP_START" | jq -c '.')" >> $GITHUB_OUTPUT
+            fi
+
+            LOGGING_CONFIG=$(yq eval -o=json '.lambda.logging_config // null' lambda-config.yaml 2>/dev/null || echo 'null')
+            if [ "$LOGGING_CONFIG" != "null" ] && [ "$LOGGING_CONFIG" != "{}" ]; then
+              echo "logging_config=$(echo "$LOGGING_CONFIG" | jq -c '.')" >> $GITHUB_OUTPUT
+            fi
+
+            CODE_SIGNING_CONFIG_ARN=$(yq eval '.lambda.code_signing_config_arn // ""' lambda-config.yaml)
+            if [ -n "$CODE_SIGNING_CONFIG_ARN" ]; then
+              echo "code_signing_config_arn=$CODE_SIGNING_CONFIG_ARN" >> $GITHUB_OUTPUT
+            fi
+          else
+            # Defaults if no config file
+            echo "function_name=${{ inputs.lambda_name }}" >> $GITHUB_OUTPUT
+            echo "description=" >> $GITHUB_OUTPUT
+            echo "memory_size=256" >> $GITHUB_OUTPUT
+            echo "timeout=30" >> $GITHUB_OUTPUT
+            echo "ephemeral_storage=512" >> $GITHUB_OUTPUT
+            echo "architectures=x86_64" >> $GITHUB_OUTPUT
+            echo "publish=true" >> $GITHUB_OUTPUT
+            echo "env_vars={}" >> $GITHUB_OUTPUT
+            echo "config_tags={}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build tags payload
+        id: tags
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          REGION: ${{ vars.AWS_REGION }}
+          VERSION: ${{ steps.set-tag.outputs.TAG }}
+          LANGUAGE: javascript
+          SERVICE: ${{ inputs.lambda_name }}
+          CONFIG_TAGS: ${{ steps.lambda-config.outputs.config_tags }}
+        run: |
+          DEFAULT_TAGS=$(jq -n \
+            --arg env "$ENVIRONMENT" \
+            --arg region "$REGION" \
+            --arg version "$VERSION" \
+            --arg language "$LANGUAGE" \
+            --arg service "$SERVICE" \
+            '{Environment:$env, Region:$region, Version:$version, Language:$language, Service:$service}')
+          MERGED=$(jq -c -s 'reduce .[] as $item ({}; . * $item)' <(echo "$DEFAULT_TAGS") <(echo "${CONFIG_TAGS:-{}}"))
+          echo "tags=$MERGED" >> $GITHUB_OUTPUT
+
+      - name: Deploy Lambda (image)
+        uses: aws-actions/aws-lambda-deploy@v1.1.0
+        with:
+          # TODO: remove the environment from the function name after testing
+          function-name: "${{ steps.lambda-config.outputs.function_name }}-${{ inputs.environment }}"
+          package-type: Image
+          image-uri: ${{ steps.image-uri.outputs.uri }}
+          role: ${{ secrets.AWS_ROLE_ARN }}
+          function-description: ${{ steps.lambda-config.outputs.description }}
+          timeout: ${{ steps.lambda-config.outputs.timeout }}
+          memory-size: ${{ steps.lambda-config.outputs.memory_size }}
+          ephemeral-storage: ${{ steps.lambda-config.outputs.ephemeral_storage }}
+          architectures: ${{ steps.lambda-config.outputs.architectures }}
+          environment: ${{ steps.lambda-config.outputs.env_vars }}
+          vpc-config: ${{ steps.lambda-config.outputs.vpc_config }}
+          dead-letter-config: ${{ steps.lambda-config.outputs.dead_letter_config }}
+          kms-key-arn: ${{ steps.lambda-config.outputs.kms_key_arn }}
+          tracing-config: ${{ steps.lambda-config.outputs.tracing_config }}
+          file-system-configs: ${{ steps.lambda-config.outputs.file_system_configs }}
+          image-config: ${{ steps.lambda-config.outputs.image_config }}
+          snap-start: ${{ steps.lambda-config.outputs.snap_start }}
+          logging-config: ${{ steps.lambda-config.outputs.logging_config }}
+          code-signing-config-arn: ${{ steps.lambda-config.outputs.code_signing_config_arn }}
+          publish: ${{ steps.lambda-config.outputs.publish }}
+          tags: ${{ steps.tags.outputs.tags }}

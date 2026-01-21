@@ -1,0 +1,108 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  detect-changes:
+    name: Detect Changed Lambdas
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      python-changed: ${{ steps.filter.outputs.python }}
+      javascript-changed: ${{ steps.filter.outputs.javascript }}
+      go-changed: ${{ steps.filter.outputs.go }}
+      python-lambdas: ${{ steps.python-lambdas.outputs.lambdas }}
+      js-lambdas: ${{ steps.js-lambdas.outputs.lambdas }}
+      go-lambdas: ${{ steps.go-lambdas.outputs.lambdas }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed Lambda functions
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            python:
+              - 'lambdas/python/**'
+            javascript:
+              - 'lambdas/javascript/**'
+            go:
+              - 'lambdas/go/**'
+
+      - name: Find changed Python Lambdas
+        id: python-lambdas
+        if: steps.filter.outputs.python == 'true'
+        run: |
+          CHANGED=$(git diff --name-only origin/master...HEAD | grep '^lambdas/python/' || true)
+          if [ -n "$CHANGED" ]; then
+            LAMBDAS=$(echo "$CHANGED" | sed 's|^lambdas/python/||' | cut -d'/' -f1 | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '["example-lambda"]')
+            echo "lambdas=$LAMBDAS" >> $GITHUB_OUTPUT
+          else
+            echo "lambdas=[]" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Find changed JavaScript Lambdas
+        id: js-lambdas
+        if: steps.filter.outputs.javascript == 'true'
+        run: |
+          CHANGED=$(git diff --name-only origin/master...HEAD | grep '^lambdas/javascript/' || true)
+          if [ -n "$CHANGED" ]; then
+            LAMBDAS=$(echo "$CHANGED" | sed 's|^lambdas/javascript/||' | cut -d'/' -f1 | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '["example-lambda"]')
+            echo "lambdas=$LAMBDAS" >> $GITHUB_OUTPUT
+          else
+            echo "lambdas=[]" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Find changed Go Lambdas
+        id: go-lambdas
+        if: steps.filter.outputs.go == 'true'
+        run: |
+          CHANGED=$(git diff --name-only origin/master...HEAD | grep '^lambdas/go/' || true)
+          if [ -n "$CHANGED" ]; then
+            LAMBDAS=$(echo "$CHANGED" | sed 's|^lambdas/go/||' | cut -d'/' -f1 | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))' || echo '["example-lambda"]')
+            echo "lambdas=$LAMBDAS" >> $GITHUB_OUTPUT
+          else
+            echo "lambdas=[]" >> $GITHUB_OUTPUT
+          fi
+
+  validate-python:
+    name: Validate Python Lambda - ${{ matrix.lambda }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.python-changed == 'true' && needs.detect-changes.outputs.python-lambdas != '[]'
+    uses: ./.github/workflows/tpl_python_validation.yml
+    strategy:
+      matrix:
+        lambda: ${{ fromJson(needs.detect-changes.outputs.python-lambdas) }}
+    with:
+      lambda_path: lambdas/python/${{ matrix.lambda }}
+      lambda_name: ${{ matrix.lambda }}
+
+  validate-javascript:
+    name: Validate JavaScript Lambda - ${{ matrix.lambda }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.javascript-changed == 'true' && needs.detect-changes.outputs.js-lambdas != '[]'
+    uses: ./.github/workflows/tpl_javascript_validation.yml
+    strategy:
+      matrix:
+        lambda: ${{ fromJson(needs.detect-changes.outputs.js-lambdas) }}
+    with:
+      lambda_path: lambdas/javascript/${{ matrix.lambda }}
+      lambda_name: ${{ matrix.lambda }}
+
+  validate-go:
+    name: Validate Go Lambda - ${{ matrix.lambda }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.go-changed == 'true' && needs.detect-changes.outputs.go-lambdas != '[]'
+    uses: ./.github/workflows/tpl_go_validation.yml
+    strategy:
+      matrix:
+        lambda: ${{ fromJson(needs.detect-changes.outputs.go-lambdas) }}
+    with:
+      lambda_path: lambdas/go/${{ matrix.lambda }}
+      lambda_name: ${{ matrix.lambda }}
