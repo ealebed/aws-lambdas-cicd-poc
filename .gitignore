@@ -99,3 +99,5 @@ terraform.tfvars
 
 # Pre-commit
 .pre-commit-config.yaml.bak
+
+node_modules/
