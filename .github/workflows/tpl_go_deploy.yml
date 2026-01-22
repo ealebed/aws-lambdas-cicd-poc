@@ -76,12 +76,32 @@ jobs:
         with:
           go-version: '1.25.0'
 
+      - name: Determine Docker platform
+        id: docker-platform
+        run: |
+          # Map Lambda architecture to Docker platform
+          ARCH="${{ steps.lambda-config.outputs.architectures }}"
+          if [ "$ARCH" = "x86_64" ]; then
+            PLATFORM="linux/amd64"
+          elif [ "$ARCH" = "arm64" ]; then
+            PLATFORM="linux/arm64"
+          else
+            echo "::error::Unsupported architecture: $ARCH. Use x86_64 or arm64"
+            exit 1
+          fi
+          echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
+          echo "Building for platform: $PLATFORM"
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: ${{ inputs.lambda_path }}
           file: ${{ inputs.lambda_path }}/Dockerfile
           push: true
+          platforms: ${{ steps.docker-platform.outputs.platform }}
+          # Disable provenance and SBOM to avoid multi-arch manifest issues with Lambda
+          provenance: false
+          sbom: false
           tags: |
             ${{ steps.ecr-repo.outputs.registry }}/${{ steps.ecr-repo.outputs.repository }}:${{ steps.set-tag.outputs.TAG }}
             ${{ steps.ecr-repo.outputs.registry }}/${{ steps.ecr-repo.outputs.repository }}:latest
