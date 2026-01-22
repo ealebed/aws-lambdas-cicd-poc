@@ -22,6 +22,9 @@ lambda:
       GREETING: "Hello from Go Lambda #1!"
       GO_LOG_LEVEL: "info"
 
+  # Role ARN (optional)
+  role_arn: "arn:aws:iam::531438381462:role/lambda-execution-role"
+
   # VPC configuration (optional)
   # vpc_config:
   #   subnet_ids:
