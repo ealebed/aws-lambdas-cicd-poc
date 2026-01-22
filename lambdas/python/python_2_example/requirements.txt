@@ -1,0 +1,2 @@
+# AWS Lambda Python dependencies
+# Add your project dependencies here
