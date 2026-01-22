@@ -225,13 +225,25 @@ jobs:
       - name: Show all outputs
         run: |
           echo "## Debug Outputs" >> $GITHUB_STEP_SUMMARY
-          echo "go-changed: '${{ needs.detect-changes.outputs.go-changed }}'" >> $GITHUB_STEP_SUMMARY
-          echo "go-lambdas: '${{ needs.detect-changes.outputs.go-lambdas }}'" >> $GITHUB_STEP_SUMMARY
-          echo "is_manual: '${{ needs.determine-environment.outputs.is_manual }}'" >> $GITHUB_STEP_SUMMARY
-          echo "Condition check:" >> $GITHUB_STEP_SUMMARY
-          echo "- go-lambdas != '[]': ${{ needs.detect-changes.outputs.go-lambdas != '[]' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- go-changed == 'true': ${{ needs.detect-changes.outputs.go-changed == 'true' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- is_manual == 'true': ${{ needs.determine-environment.outputs.is_manual == 'true' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Environment" >> $GITHUB_STEP_SUMMARY
+          echo "- Environment: '${{ needs.determine-environment.outputs.environment }}'" >> $GITHUB_STEP_SUMMARY
+          echo "- Is Manual: '${{ needs.determine-environment.outputs.is_manual }}'" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Python Lambdas" >> $GITHUB_STEP_SUMMARY
+          echo "- Changed: '${{ needs.detect-changes.outputs.python-changed }}'" >> $GITHUB_STEP_SUMMARY
+          echo "- Lambdas: '${{ needs.detect-changes.outputs.python-lambdas }}'" >> $GITHUB_STEP_SUMMARY
+          echo "- Will Deploy: ${{ needs.detect-changes.outputs.python-lambdas != '[]' && (needs.detect-changes.outputs.python-changed == 'true' || needs.determine-environment.outputs.is_manual == 'true') }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### JavaScript Lambdas" >> $GITHUB_STEP_SUMMARY
+          echo "- Changed: '${{ needs.detect-changes.outputs.javascript-changed }}'" >> $GITHUB_STEP_SUMMARY
+          echo "- Lambdas: '${{ needs.detect-changes.outputs.js-lambdas }}'" >> $GITHUB_STEP_SUMMARY
+          echo "- Will Deploy: ${{ needs.detect-changes.outputs.js-lambdas != '[]' && (needs.detect-changes.outputs.javascript-changed == 'true' || needs.determine-environment.outputs.is_manual == 'true') }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Go Lambdas" >> $GITHUB_STEP_SUMMARY
+          echo "- Changed: '${{ needs.detect-changes.outputs.go-changed }}'" >> $GITHUB_STEP_SUMMARY
+          echo "- Lambdas: '${{ needs.detect-changes.outputs.go-lambdas }}'" >> $GITHUB_STEP_SUMMARY
+          echo "- Will Deploy: ${{ needs.detect-changes.outputs.go-lambdas != '[]' && (needs.detect-changes.outputs.go-changed == 'true' || needs.determine-environment.outputs.is_manual == 'true') }}" >> $GITHUB_STEP_SUMMARY
 
   deploy-python:
     name: Deploy Python Lambda - ${{ matrix.lambda }} to ${{ needs.determine-environment.outputs.environment }}

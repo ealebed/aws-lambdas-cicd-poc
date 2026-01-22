@@ -100,4 +100,8 @@ terraform.tfvars
 # Pre-commit
 .pre-commit-config.yaml.bak
 
+# Python tools
+.ruff_cache/
+**/.ruff_cache/
+
 node_modules/
