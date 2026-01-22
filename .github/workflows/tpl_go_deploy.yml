@@ -176,6 +176,12 @@ jobs:
             if [ -n "$CODE_SIGNING_CONFIG_ARN" ]; then
               echo "code_signing_config_arn=$CODE_SIGNING_CONFIG_ARN" >> $GITHUB_OUTPUT
             fi
+
+            # Lambda execution role ARN (required for Lambda to assume)
+            ROLE_ARN=$(yq eval '.lambda.role_arn // ""' lambda-config.yaml)
+            if [ -n "$ROLE_ARN" ]; then
+              echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
+            fi
           else
             # Defaults if no config file
             echo "function_name=${{ inputs.lambda_name }}" >> $GITHUB_OUTPUT
@@ -219,6 +225,24 @@ jobs:
           MERGED=$(jq -c -s 'reduce .[] as $item ({}; . * $item)' <(echo "$DEFAULT_TAGS") <(echo "$CONFIG_TAGS_JSON"))
           echo "tags=$MERGED" >> $GITHUB_OUTPUT
 
+      - name: Determine Lambda execution role ARN
+        id: lambda-role
+        run: |
+          # Priority: lambda-config.yaml role_arn > LAMBDA_EXECUTION_ROLE_ARN secret > AWS_ROLE_ARN secret
+          # Note: AWS_ROLE_ARN is the GitHub Actions OIDC role, which may not be suitable for Lambda execution
+          if [ -n "${{ steps.lambda-config.outputs.role_arn }}" ]; then
+            ROLE_ARN="${{ steps.lambda-config.outputs.role_arn }}"
+          elif [ -n "${{ secrets.LAMBDA_EXECUTION_ROLE_ARN }}" ]; then
+            ROLE_ARN="${{ secrets.LAMBDA_EXECUTION_ROLE_ARN }}"
+          elif [ -n "${{ secrets.AWS_ROLE_ARN }}" ]; then
+            ROLE_ARN="${{ secrets.AWS_ROLE_ARN }}"
+          else
+            echo "::error::No Lambda execution role ARN found. Set role_arn in lambda-config.yaml or LAMBDA_EXECUTION_ROLE_ARN secret."
+            exit 1
+          fi
+          echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
+          echo "Using Lambda execution role: $ROLE_ARN"
+
       - name: Deploy Lambda (image)
         uses: aws-actions/aws-lambda-deploy@v1.1.0
         with:
@@ -226,7 +250,8 @@ jobs:
           function-name: "${{ steps.lambda-config.outputs.function_name }}-${{ inputs.environment }}"
           package-type: Image
           image-uri: ${{ steps.image-uri.outputs.uri }}
-          role: ${{ secrets.AWS_ROLE_ARN }}
+          # Lambda execution role ARN (must be a role that Lambda service can assume)
+          role: ${{ steps.lambda-role.outputs.role_arn }}
           function-description: ${{ steps.lambda-config.outputs.description }}
           timeout: ${{ steps.lambda-config.outputs.timeout }}
           memory-size: ${{ steps.lambda-config.outputs.memory_size }}
@@ -244,3 +269,5 @@ jobs:
           code-signing-config-arn: ${{ steps.lambda-config.outputs.code_signing_config_arn }}
           publish: ${{ steps.lambda-config.outputs.publish }}
           tags: ${{ steps.tags.outputs.tags }}
+          # Note: runtime and handler are NOT set for container images (package-type: Image)
+          # They are only used for zip-based deployments
