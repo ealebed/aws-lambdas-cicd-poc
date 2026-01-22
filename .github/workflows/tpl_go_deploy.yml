@@ -78,9 +78,20 @@ jobs:
 
       - name: Determine Docker platform
         id: docker-platform
+        working-directory: ${{ inputs.lambda_path }}
         run: |
           # Map Lambda architecture to Docker platform
-          ARCH="${{ steps.lambda-config.outputs.architectures }}"
+          # Read from config if exists, otherwise default to x86_64
+          if [ -f lambda-config.yaml ]; then
+            if ! command -v yq &> /dev/null; then
+              wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+              chmod +x /usr/local/bin/yq
+            fi
+            ARCH=$(yq eval '.lambda.architectures // "x86_64"' lambda-config.yaml)
+          else
+            ARCH="x86_64"
+          fi
+
           if [ "$ARCH" = "x86_64" ]; then
             PLATFORM="linux/amd64"
           elif [ "$ARCH" = "arm64" ]; then
