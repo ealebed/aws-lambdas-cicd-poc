@@ -67,23 +67,24 @@ aws-lambdas-cicd-poc/
 
 ## Key Features
 
-- **Multi-language support**: Python 3.14, Node.js 24, Go 1.25
+- **Multi-language support**: Python 3.13, Node.js 24, Go 1.25
 - **Container-based deployment**: Uses official AWS Lambda base images from ECR Public
 - **Automatic validation**: PR validation with format, lint, and test checks
 - **Automatic DEV deployment**: Deploys to DEV environment on merge to master
 - **Manual TEST/PROD deployment**: Workflow dispatch for controlled deployments
 - **Nested folder structure**: Support for multiple Lambdas per language (lambda_name = folder_name)
 - **IAM Role-based authentication**: No static credentials, uses OIDC
+- **Separate IAM roles**: GitHub Actions role for CI/CD, Lambda execution role for runtime
 - **Reusable workflow templates**: Templates can be moved to shared repositories
 - **Workflow timeouts**: Workflows have a 15-minute timeout to prevent hanging jobs
-- **Simplified configuration**: Uses environment variables (vars) for non-sensitive config, only one IAM role needed
+- **Simplified configuration**: Uses environment variables (vars) for non-sensitive config
 - **Automatic ECR repository naming**: Repositories created as `lambda-{function-name}`
 - **Official deploy action**: Uses `aws-actions/aws-lambda-deploy` for container-image Lambdas, sourcing memory/timeout/storage/env/tags from each `lambda-config.yaml` plus dynamic tags (Environment, Region, Version, Language, Team, Service)
 - **Smart image tagging**: Timestamp-based tags with SNAPSHOT suffix for non-master branches
 
 ## Lambda Runtime Versions
 
-- **Python**: 3.14 (using `public.ecr.aws/lambda/python:3.14`)
+- **Python**: 3.13 (using `public.ecr.aws/lambda/python:3.13`)
 - **Node.js**: 24.x (using `public.ecr.aws/lambda/nodejs:24`)
 - **Go**: 1.25.0 (using `public.ecr.aws/lambda/provided:al2023`)
 
@@ -207,19 +208,25 @@ Secrets are used for sensitive values like IAM role ARNs.
    - In the environment configuration page, scroll to **Environment secrets** section
    - Click **Add secret**
 
-2. **Required Secret**:
+2. **Required Secrets**:
 
    | Secret Name | Description | Example Value |
    |------------|-------------|---------------|
-   | `AWS_ROLE_ARN` | ARN of the IAM role to assume (OIDC). This role is used for both AWS authentication and Lambda execution. | `arn:aws:iam::123456789012:role/github-actions-role` |
+   | `AWS_ROLE_ARN` | ARN of the IAM role for GitHub Actions OIDC authentication (used for CI/CD deployment). | `arn:aws:iam::123456789012:role/github-actions-role` |
+   | `LAMBDA_EXECUTION_ROLE_ARN` | ARN of the IAM role for Lambda function execution (used at runtime). Optional - can also be set in `lambda-config.yaml`. | `arn:aws:iam::123456789012:role/lambda-execution-role` |
 
-3. **Adding Secret**:
-   - Click **Add secret**
-   - Enter the secret name: `AWS_ROLE_ARN`
+3. **Adding Secrets**:
+   - Click **Add secret** for each secret
+   - Enter the secret name exactly as shown
    - Enter the IAM role ARN
    - Click **Add secret**
+   - Repeat for both secrets
 
 **Notes**:
+- `AWS_ROLE_ARN` is used by GitHub Actions to authenticate and deploy resources (ECR, Lambda, etc.)
+- `LAMBDA_EXECUTION_ROLE_ARN` is the role that Lambda service assumes to execute your function
+- If `LAMBDA_EXECUTION_ROLE_ARN` is not set as a secret, you can specify it in `lambda-config.yaml` with `role_arn`
+- Priority: `lambda-config.yaml` → `LAMBDA_EXECUTION_ROLE_ARN` secret → `AWS_ROLE_ARN` secret (fallback)
 - `AWS_ROLE_SESSION_NAME` is automatically generated as `GitHubActionsSession-{environment}-{lambda_name}` (e.g., `GitHubActionsSession-dev-python_1_example`)
 - `ECR_REPOSITORY` is automatically generated as `lambda-{function-name}` (e.g., `lambda-python_1_example`)
 - The same `AWS_ROLE_ARN` is used for both AWS authentication and Lambda execution role
@@ -257,7 +264,7 @@ After setup, each environment should have:
 
 - **Environment Name**: `dev`, `test`, or `prod`
 - **2 Environment Variables**: `AWS_REGION`, `AWS_ACCOUNT_ID`
-- **1 Secret**: `AWS_ROLE_ARN`
+- **2 Secrets**: `AWS_ROLE_ARN`, `LAMBDA_EXECUTION_ROLE_ARN` (or set `role_arn` in `lambda-config.yaml`)
 - **Automatic Values**:
   - Session Name: `GitHubActionsSession-{environment}-{lambda_name}` (e.g., `GitHubActionsSession-dev-python_1_example`)
   - ECR Repository: `lambda-{function-name}` (e.g., `lambda-python_1_example`)
@@ -293,23 +300,45 @@ To verify your environments are configured correctly:
 
 **Issue**: Workflow fails with "Secret not found" or "Variable not found"
 - **Solution**:
-  - Verify `AWS_ROLE_ARN` secret is added to the environment
+  - Verify `AWS_ROLE_ARN` and `LAMBDA_EXECUTION_ROLE_ARN` secrets are added to the environment (or set `role_arn` in `lambda-config.yaml`)
   - Verify `AWS_REGION` and `AWS_ACCOUNT_ID` variables are added to the environment
   - Check that variable/secret names match exactly (case-sensitive)
 
 **Issue**: Deployment fails with AWS authentication error
 - **Solution**: Check that `AWS_ROLE_ARN` is correct and the IAM role trust policy allows GitHub Actions
 
+**Issue**: Lambda deployment fails with "The role defined for the function cannot be assumed by Lambda"
+- **Solution**:
+  - Ensure you have a separate Lambda execution role (not the GitHub Actions role)
+  - Set `LAMBDA_EXECUTION_ROLE_ARN` secret or add `role_arn` to `lambda-config.yaml`
+  - Verify the Lambda execution role trust policy allows `lambda.amazonaws.com` to assume it
+  - Ensure the GitHub Actions role has `iam:PassRole` permission for the Lambda execution role
+
+**Issue**: Docker image build fails with "image manifest media type not supported"
+- **Solution**: This is automatically handled by the workflow (provenance and SBOM are disabled), but ensure you're using the latest workflow templates
+
 **Issue**: Cannot deploy to prod (blocked by protection rules)
 - **Solution**: Ensure required reviewers have approved the deployment, or adjust protection rules
 
 ## AWS IAM Role Setup
 
-The `AWS_ROLE_ARN` configured in GitHub environments is used for both:
-1. **AWS Authentication**: Assuming the role via OIDC to access AWS services
-2. **Lambda Execution**: The same role is passed to Lambda functions as their execution role
+You need **two separate IAM roles** for Lambda deployment:
 
-### GitHub OIDC Provider
+1. **GitHub Actions Role** (for CI/CD deployment)
+   - Used by GitHub Actions to authenticate and deploy resources
+   - Trust: GitHub OIDC (`token.actions.githubusercontent.com`)
+   - Permissions: ECR, Lambda management, IAM PassRole
+
+2. **Lambda Execution Role** (for Lambda runtime)
+   - Used by Lambda service to execute your function
+   - Trust: `lambda.amazonaws.com`
+   - Permissions: CloudWatch Logs, and any other services your Lambda needs
+
+See [docs/lambda-execution-role-setup.md](docs/lambda-execution-role-setup.md) for detailed setup instructions.
+
+### GitHub Actions Role Setup
+
+#### GitHub OIDC Provider
 
 1. Create an OIDC identity provider in AWS IAM:
    - Provider URL: `https://token.actions.githubusercontent.com`
@@ -340,9 +369,9 @@ The `AWS_ROLE_ARN` configured in GitHub environments is used for both:
 }
 ```
 
-### Required IAM Permissions
+#### Required IAM Permissions for GitHub Actions Role
 
-The IAM role needs the following permissions:
+The GitHub Actions role needs the following permissions:
 
 ```json
 {
@@ -380,13 +409,53 @@ The IAM role needs the following permissions:
       "Action": [
         "iam:PassRole"
       ],
-      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/<ROLE_NAME>",
+      "Resource": [
+        "arn:aws:iam::<ACCOUNT_ID>:role/lambda-execution-role",
+        "arn:aws:iam::<ACCOUNT_ID>:role/github-actions-role"
+      ],
       "Condition": {
         "StringEquals": {
           "iam:PassedToService": "lambda.amazonaws.com"
         }
       }
-    },
+    }
+  ]
+}
+```
+
+**Important Notes**:
+- The role must be able to pass the Lambda execution role to Lambda (the `iam:PassRole` permission)
+- Replace `<ACCOUNT_ID>` with your actual AWS account ID
+- ECR repositories are automatically created if they don't exist (requires `ecr:CreateRepository` permission)
+- CloudWatch Logs permissions are NOT needed here - they belong to the Lambda execution role
+
+### Lambda Execution Role Setup
+
+The Lambda execution role is used by Lambda service to execute your function. See [docs/lambda-execution-role-setup.md](docs/lambda-execution-role-setup.md) for complete setup instructions.
+
+**Quick Setup**:
+
+1. **Trust Policy** (allows Lambda service to assume the role):
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+```
+
+2. **Minimum Permissions** (for basic Lambda execution):
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
     {
       "Effect": "Allow",
       "Action": [
@@ -400,11 +469,9 @@ The IAM role needs the following permissions:
 }
 ```
 
-**Important Notes**:
-- The role must be able to pass itself to Lambda (the `iam:PassRole` permission should allow the role's own ARN)
-- Replace `<ACCOUNT_ID>` and `<ROLE_NAME>` in the IAM permissions with your actual values
-- The role needs CloudWatch Logs permissions for Lambda function logging
-- ECR repositories are automatically created if they don't exist (requires `ecr:CreateRepository` permission)
+3. **Configuration**:
+   - Set `LAMBDA_EXECUTION_ROLE_ARN` secret in GitHub environment, OR
+   - Add `role_arn` to `lambda-config.yaml` in your Lambda function directory
 
 ## Pre-commit Hooks Setup
 
@@ -462,6 +529,10 @@ lambda:
   timeout: 30       # seconds (1-900)
   ephemeral_storage: 512  # MB (512-10240)
   architectures: x86_64  # x86_64 or arm64
+
+  # Lambda execution role ARN (optional: set here or in GitHub environment as LAMBDA_EXECUTION_ROLE_ARN secret)
+  # Priority: lambda-config.yaml role_arn > LAMBDA_EXECUTION_ROLE_ARN secret > AWS_ROLE_ARN secret (fallback)
+  # role_arn: "arn:aws:iam::123456789012:role/lambda-execution-role"
 
   # Environment variables
   environment:
@@ -544,6 +615,7 @@ lambda:
 - `timeout`: Function timeout in seconds (1-900)
 - `ephemeral_storage`: Size of `/tmp` directory in MB (512-10240)
 - `architectures`: Instruction set architecture (`x86_64` or `arm64`)
+- `role_arn`: Lambda execution role ARN (optional - can also be set via `LAMBDA_EXECUTION_ROLE_ARN` secret)
 - `publish`: Whether to publish a new version after update (default: `true`)
 
 **Environment Variables:**
@@ -650,11 +722,13 @@ If `lambda-config.yaml` is not present, the following defaults are used:
 
 All Dockerfiles must use official AWS Lambda base images:
 
-- **Python**: `FROM public.ecr.aws/lambda/python:3.14`
+- **Python**: `FROM public.ecr.aws/lambda/python:3.13`
 - **JavaScript**: `FROM public.ecr.aws/lambda/nodejs:24`
 - **Go**: `FROM public.ecr.aws/lambda/provided:al2023` (for runtime) and `golang:1.25-alpine` (for build stage)
 
-See example Dockerfiles in `lambdas/<language>/example-lambda/` for reference.
+**Important**: Docker images are built with `provenance: false` and `sbom: false` to ensure compatibility with AWS Lambda, which doesn't support multi-architecture manifest lists.
+
+See example Dockerfiles in `lambdas/<language>/<language>_1_example/` for reference.
 
 ## Manual Deployment
 
@@ -694,7 +768,7 @@ The reusable workflows are designed to be moved to a shared repository:
 
 - Verify the IAM role has ECR permissions
 - Check that the ECR repository exists
-- Ensure the repository name follows the pattern `lambda-{function-name}-{environment}`
+- Ensure the repository name follows the pattern `lambda-{function-name}`
 
 ### OIDC authentication failures
 
@@ -711,9 +785,9 @@ The reusable workflows are designed to be moved to a shared repository:
 ## Example Lambda Functions
 
 Example Lambda functions are provided in:
-- `lambdas/python/example-lambda/`
-- `lambdas/javascript/example-lambda/`
-- `lambdas/go/example-lambda/`
+- `lambdas/python/python_1_example/`
+- `lambdas/javascript/javascript_1_example/`
+- `lambdas/go/go_1_example/`
 
 These examples demonstrate:
 - Basic Lambda handler structure
@@ -725,6 +799,8 @@ These examples demonstrate:
 ## Additional Notes
 
 - All workflows use the latest stable versions of languages as of January 2026
+- Docker images are built for single architecture (no multi-arch manifests) for Lambda compatibility
+- Lambda execution role can be configured per-function in `lambda-config.yaml` or globally via GitHub secret
 - Container images are tagged with timestamp-based tags and `latest`
 - Lambda functions are created if they don't exist, or updated if they do
 - Default Lambda configuration: 256MB memory, 30s timeout (configurable in templates)
