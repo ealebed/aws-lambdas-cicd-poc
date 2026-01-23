@@ -1,0 +1,22 @@
+{
+  "name": "aws-lambda-javascript-example",
+  "version": "1.0.0",
+  "description": "Example AWS Lambda function in JavaScript",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "keywords": [
+    "aws",
+    "lambda"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.0.0"
+  }
+}
