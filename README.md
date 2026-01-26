@@ -19,48 +19,47 @@ aws-lambdas-cicd-poc/
 │       └── tpl_go_deploy.yml           # Reusable: Go deployment
 ├── lambdas/
 │   ├── python/
+│   │   ├── Dockerfile             # Shared Python Dockerfile
 │   │   ├── pyproject.toml          # Shared Python linter config
 │   │   ├── python_1_example/
-│   │   │   ├── Dockerfile
 │   │   │   ├── lambda_function.py
 │   │   │   ├── requirements.txt
 │   │   │   ├── test_lambda_function.py
 │   │   │   └── lambda-config.yaml  # Lambda-specific configuration
 │   │   └── python_2_example/
-│   │       ├── Dockerfile
 │   │       ├── lambda_function.py
 │   │       ├── requirements.txt
 │   │       ├── test_lambda_function.py
 │   │       └── lambda-config.yaml
 │   ├── javascript/
+│   │   ├── Dockerfile             # Shared JavaScript Dockerfile
 │   │   ├── .eslintrc.json         # Shared ESLint config
 │   │   ├── .prettierrc.json       # Shared Prettier config
 │   │   ├── javascript_1_example/
-│   │   │   ├── Dockerfile
 │   │   │   ├── index.js
 │   │   │   ├── package.json
 │   │   │   ├── index.test.js
 │   │   │   └── lambda-config.yaml
 │   │   └── javascript_2_example/
-│   │       ├── Dockerfile
 │   │       ├── index.js
 │   │       ├── package.json
 │   │       ├── index.test.js
 │   │       └── lambda-config.yaml
 │   └── go/
+│       ├── Dockerfile             # Shared Go Dockerfile
 │       ├── .golangci.yaml          # Shared golangci-lint config
 │       ├── go_1_example/
-│       │   ├── Dockerfile
 │       │   ├── main.go
 │       │   ├── main_test.go
 │       │   ├── go.mod
 │       │   └── lambda-config.yaml
 │       └── go_2_example/
-│           ├── Dockerfile
 │           ├── main.go
 │           ├── main_test.go
 │           ├── go.mod
 │           └── lambda-config.yaml
+├── scripts/
+│   └── parse-lambda-config.sh     # Script to parse lambda-config.yaml
 ├── .pre-commit-config.yaml         # Pre-commit hooks configuration
 └── README.md
 ```
@@ -78,6 +77,8 @@ aws-lambdas-cicd-poc/
 - **Reusable workflow templates**: Templates can be moved to shared repositories
 - **Workflow timeouts**: Workflows have a 15-minute timeout to prevent hanging jobs
 - **Simplified configuration**: Uses environment variables (vars) for non-sensitive config
+- **Shared Dockerfiles**: One Dockerfile per language, shared across all lambdas of that language
+- **Centralized parsing**: Lambda configuration parsing handled by reusable script
 - **Automatic ECR repository naming**: Repositories created as `lambda-{function-name}`
 - **Official deploy action**: Uses `aws-actions/aws-lambda-deploy` for container-image Lambdas, sourcing memory/timeout/storage/env/tags from each `lambda-config.yaml` plus dynamic tags (Environment, Region, Version, Language, Team, Service)
 - **Smart image tagging**: Timestamp-based tags with SNAPSHOT suffix for non-master branches
@@ -507,6 +508,8 @@ Pre-commit hooks are configured to run checks before commits:
 
 Each Lambda function can have a `lambda-config.yaml` file in its directory to configure all aspects of the Lambda function. This configuration is used by the CI/CD workflows to deploy the function using the official `aws-actions/aws-lambda-deploy` action.
 
+**Configuration Parsing**: The `lambda-config.yaml` file is parsed by the `scripts/parse-lambda-config.sh` script, which extracts all configuration values and outputs them as GitHub Actions step outputs. This centralized approach ensures consistency across all language workflows.
+
 ### Configuration File Structure
 
 The configuration file uses a flat structure (not nested) for easier readability and maintenance:
@@ -656,21 +659,21 @@ If `lambda-config.yaml` is not present, the following defaults are used:
 2. Add files:
    - `lambda_function.py`: Lambda handler
    - `requirements.txt`: Python dependencies
-   - `Dockerfile`: Container definition
    - `test_lambda_function.py`: Tests
    - `lambda-config.yaml`: Lambda configuration (optional)
 
 3. Example structure:
    ```
    lambdas/python/my-lambda/
-   ├── Dockerfile
    ├── lambda_function.py
    ├── requirements.txt
    ├── test_lambda_function.py
    └── lambda-config.yaml
    ```
 
-**Note**: Python linter configuration (`pyproject.toml`) is shared in `lambdas/python/` and used by all Python Lambdas.
+**Note**:
+- Python linter configuration (`pyproject.toml`) is shared in `lambdas/python/` and used by all Python Lambdas
+- Dockerfile is shared at `lambdas/python/Dockerfile` - you don't need to create one in your lambda directory
 
 ### JavaScript Lambda
 
@@ -678,21 +681,21 @@ If `lambda-config.yaml` is not present, the following defaults are used:
 2. Add files:
    - `index.js`: Lambda handler
    - `package.json`: Node.js dependencies and scripts
-   - `Dockerfile`: Container definition
    - `index.test.js`: Tests
    - `lambda-config.yaml`: Lambda configuration (optional)
 
 3. Example structure:
    ```
    lambdas/javascript/my-lambda/
-   ├── Dockerfile
    ├── index.js
    ├── package.json
    ├── index.test.js
    └── lambda-config.yaml
    ```
 
-**Note**: JavaScript linter configurations (`.eslintrc.json`, `.prettierrc.json`) are shared in `lambdas/javascript/` and used by all JavaScript Lambdas.
+**Note**:
+- JavaScript linter configurations (`.eslintrc.json`, `.prettierrc.json`) are shared in `lambdas/javascript/` and used by all JavaScript Lambdas
+- Dockerfile is shared at `lambdas/javascript/Dockerfile` - you don't need to create one in your lambda directory
 
 ### Go Lambda
 
@@ -700,35 +703,38 @@ If `lambda-config.yaml` is not present, the following defaults are used:
 2. Add files:
    - `main.go`: Lambda handler
    - `go.mod`: Go module definition
-   - `Dockerfile`: Container definition
    - `main_test.go`: Tests
    - `lambda-config.yaml`: Lambda configuration (optional)
 
 3. Example structure:
    ```
    lambdas/go/my-lambda/
-   ├── Dockerfile
    ├── main.go
    ├── main_test.go
    ├── go.mod
    └── lambda-config.yaml
    ```
 
-**Note**: Go linter configuration (`.golangci.yaml`) is shared in `lambdas/go/` and used by all Go Lambdas.
+**Note**:
+- Go linter configuration (`.golangci.yaml`) is shared in `lambdas/go/` and used by all Go Lambdas
+- Dockerfile is shared at `lambdas/go/Dockerfile` - you don't need to create one in your lambda directory
 
 **Important**: The folder name (`<lambda-name>`) will be used as the Lambda function name in AWS, unless overridden in `lambda-config.yaml`.
 
 ## Dockerfile Requirements
 
-All Dockerfiles must use official AWS Lambda base images:
+**Shared Dockerfiles**: Each language has a single shared Dockerfile located in `lambdas/<language>/Dockerfile`. All lambdas of the same language use the same Dockerfile, ensuring consistency and easier maintenance.
 
-- **Python**: `FROM public.ecr.aws/lambda/python:3.13`
-- **JavaScript**: `FROM public.ecr.aws/lambda/nodejs:24`
-- **Go**: `FROM public.ecr.aws/lambda/provided:al2023` (for runtime) and `golang:1.25-alpine` (for build stage)
+All Dockerfiles use official AWS Lambda base images:
 
-**Important**: Docker images are built with `provenance: false` and `sbom: false` to ensure compatibility with AWS Lambda, which doesn't support multi-architecture manifest lists.
+- **Python**: `lambdas/python/Dockerfile` - Uses `public.ecr.aws/lambda/python:3.13`
+- **JavaScript**: `lambdas/javascript/Dockerfile` - Uses `public.ecr.aws/lambda/nodejs:24`
+- **Go**: `lambdas/go/Dockerfile` - Uses `public.ecr.aws/lambda/provided:al2023` (runtime) and `golang:1.25-alpine` (build stage)
 
-See example Dockerfiles in `lambdas/<language>/<language>_1_example/` for reference.
+**Important**:
+- Docker images are built with `provenance: false` and `sbom: false` to ensure compatibility with AWS Lambda, which doesn't support multi-architecture manifest lists
+- The build context is set to the individual lambda directory, but the Dockerfile path points to the shared file
+- Individual lambda directories do not need their own Dockerfiles (though they may exist for reference)
 
 ## Manual Deployment
 
@@ -794,13 +800,17 @@ These examples demonstrate:
 - Logging
 - Environment variable usage
 - Test structure
-- Dockerfile configuration
+- `lambda-config.yaml` configuration
+
+**Note**: Dockerfiles are shared at the language level (`lambdas/<language>/Dockerfile`), so individual lambda directories don't need their own Dockerfiles.
 
 ## Additional Notes
 
 - All workflows use the latest stable versions of languages as of January 2026
 - Docker images are built for single architecture (no multi-arch manifests) for Lambda compatibility
 - Lambda execution role can be configured per-function in `lambda-config.yaml` or globally via GitHub secret
+- **Shared Dockerfiles**: One Dockerfile per language ensures consistency and easier maintenance
+- **Centralized Scripts**: Lambda configuration parsing is handled by `scripts/parse-lambda-config.sh`, reducing code duplication across workflows
 - Container images are tagged with timestamp-based tags and `latest`
 - Lambda functions are created if they don't exist, or updated if they do
 - Default Lambda configuration: 256MB memory, 30s timeout (configurable in templates)
