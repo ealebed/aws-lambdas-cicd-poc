@@ -107,7 +107,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ${{ inputs.lambda_path }}
-          file: ${{ inputs.lambda_path }}/Dockerfile
+          file: lambdas/go/Dockerfile
           push: true
           platforms: ${{ steps.docker-platform.outputs.platform }}
           # Disable provenance and SBOM to avoid multi-arch manifest issues with Lambda
@@ -126,105 +126,8 @@ jobs:
 
       - name: Parse Lambda configuration
         id: lambda-config
-        working-directory: ${{ inputs.lambda_path }}
         run: |
-          if [ -f lambda-config.yaml ]; then
-            if ! command -v yq &> /dev/null; then
-              wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-              chmod +x /usr/local/bin/yq
-            fi
-            if ! command -v jq &> /dev/null; then
-              sudo apt-get update && sudo apt-get install -y jq
-            fi
-
-            # Basic configuration
-            FUNCTION_NAME=$(yq eval '.lambda.name // "${{ inputs.lambda_name }}"' lambda-config.yaml)
-            DESCRIPTION=$(yq eval '.lambda.description // ""' lambda-config.yaml)
-            MEMORY_SIZE=$(yq eval '.lambda.memory_size // 256' lambda-config.yaml)
-            TIMEOUT=$(yq eval '.lambda.timeout // 30' lambda-config.yaml)
-            EPHEMERAL_STORAGE=$(yq eval '.lambda.ephemeral_storage // 512' lambda-config.yaml)
-            ARCHITECTURES=$(yq eval '.lambda.architectures // "x86_64"' lambda-config.yaml)
-            PUBLISH=$(yq eval '.lambda.publish // true' lambda-config.yaml)
-
-            echo "function_name=$FUNCTION_NAME" >> $GITHUB_OUTPUT
-            echo "description=$DESCRIPTION" >> $GITHUB_OUTPUT
-            echo "memory_size=$MEMORY_SIZE" >> $GITHUB_OUTPUT
-            echo "timeout=$TIMEOUT" >> $GITHUB_OUTPUT
-            echo "ephemeral_storage=$EPHEMERAL_STORAGE" >> $GITHUB_OUTPUT
-            echo "architectures=$ARCHITECTURES" >> $GITHUB_OUTPUT
-            echo "publish=$PUBLISH" >> $GITHUB_OUTPUT
-
-            # Environment variables
-            ENV_VARS=$(yq eval -o=json '.lambda.environment.variables // {}' lambda-config.yaml 2>/dev/null || echo '{}')
-            echo "env_vars=$(echo "$ENV_VARS" | jq -c '.')" >> $GITHUB_OUTPUT
-
-            # Tags
-            TAGS=$(yq eval -o=json '.lambda.tags // {}' lambda-config.yaml 2>/dev/null || echo '{}')
-            echo "config_tags=$(echo "$TAGS" | jq -c '.')" >> $GITHUB_OUTPUT
-
-            # Optional configurations (as JSON strings)
-            VPC_CONFIG=$(yq eval -o=json '.lambda.vpc_config // null' lambda-config.yaml 2>/dev/null || echo 'null')
-            if [ "$VPC_CONFIG" != "null" ] && [ "$VPC_CONFIG" != "{}" ]; then
-              echo "vpc_config=$(echo "$VPC_CONFIG" | jq -c '.')" >> $GITHUB_OUTPUT
-            fi
-
-            DEAD_LETTER_CONFIG=$(yq eval -o=json '.lambda.dead_letter_config // null' lambda-config.yaml 2>/dev/null || echo 'null')
-            if [ "$DEAD_LETTER_CONFIG" != "null" ] && [ "$DEAD_LETTER_CONFIG" != "{}" ]; then
-              echo "dead_letter_config=$(echo "$DEAD_LETTER_CONFIG" | jq -c '.')" >> $GITHUB_OUTPUT
-            fi
-
-            KMS_KEY_ARN=$(yq eval '.lambda.kms_key_arn // ""' lambda-config.yaml)
-            if [ -n "$KMS_KEY_ARN" ]; then
-              echo "kms_key_arn=$KMS_KEY_ARN" >> $GITHUB_OUTPUT
-            fi
-
-            TRACING_CONFIG=$(yq eval -o=json '.lambda.tracing_config // null' lambda-config.yaml 2>/dev/null || echo 'null')
-            if [ "$TRACING_CONFIG" != "null" ] && [ "$TRACING_CONFIG" != "{}" ]; then
-              echo "tracing_config=$(echo "$TRACING_CONFIG" | jq -c '.')" >> $GITHUB_OUTPUT
-            fi
-
-            FILE_SYSTEM_CONFIGS=$(yq eval -o=json '.lambda.file_system_configs // null' lambda-config.yaml 2>/dev/null || echo 'null')
-            if [ "$FILE_SYSTEM_CONFIGS" != "null" ] && [ "$FILE_SYSTEM_CONFIGS" != "[]" ]; then
-              echo "file_system_configs=$(echo "$FILE_SYSTEM_CONFIGS" | jq -c '.')" >> $GITHUB_OUTPUT
-            fi
-
-            IMAGE_CONFIG=$(yq eval -o=json '.lambda.image_config // null' lambda-config.yaml 2>/dev/null || echo 'null')
-            if [ "$IMAGE_CONFIG" != "null" ] && [ "$IMAGE_CONFIG" != "{}" ]; then
-              echo "image_config=$(echo "$IMAGE_CONFIG" | jq -c '.')" >> $GITHUB_OUTPUT
-            fi
-
-            SNAP_START=$(yq eval -o=json '.lambda.snap_start // null' lambda-config.yaml 2>/dev/null || echo 'null')
-            if [ "$SNAP_START" != "null" ] && [ "$SNAP_START" != "{}" ]; then
-              echo "snap_start=$(echo "$SNAP_START" | jq -c '.')" >> $GITHUB_OUTPUT
-            fi
-
-            LOGGING_CONFIG=$(yq eval -o=json '.lambda.logging_config // null' lambda-config.yaml 2>/dev/null || echo 'null')
-            if [ "$LOGGING_CONFIG" != "null" ] && [ "$LOGGING_CONFIG" != "{}" ]; then
-              echo "logging_config=$(echo "$LOGGING_CONFIG" | jq -c '.')" >> $GITHUB_OUTPUT
-            fi
-
-            CODE_SIGNING_CONFIG_ARN=$(yq eval '.lambda.code_signing_config_arn // ""' lambda-config.yaml)
-            if [ -n "$CODE_SIGNING_CONFIG_ARN" ]; then
-              echo "code_signing_config_arn=$CODE_SIGNING_CONFIG_ARN" >> $GITHUB_OUTPUT
-            fi
-
-            # Lambda execution role ARN (required for Lambda to assume)
-            ROLE_ARN=$(yq eval '.lambda.role_arn // ""' lambda-config.yaml)
-            if [ -n "$ROLE_ARN" ]; then
-              echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
-            fi
-          else
-            # Defaults if no config file
-            echo "function_name=${{ inputs.lambda_name }}" >> $GITHUB_OUTPUT
-            echo "description=" >> $GITHUB_OUTPUT
-            echo "memory_size=256" >> $GITHUB_OUTPUT
-            echo "timeout=30" >> $GITHUB_OUTPUT
-            echo "ephemeral_storage=512" >> $GITHUB_OUTPUT
-            echo "architectures=x86_64" >> $GITHUB_OUTPUT
-            echo "publish=true" >> $GITHUB_OUTPUT
-            echo "env_vars={}" >> $GITHUB_OUTPUT
-            echo "config_tags={}" >> $GITHUB_OUTPUT
-          fi
+          bash scripts/parse-lambda-config.sh "${{ inputs.lambda_path }}" "${{ inputs.lambda_name }}"
 
       - name: Build tags payload
         id: tags
