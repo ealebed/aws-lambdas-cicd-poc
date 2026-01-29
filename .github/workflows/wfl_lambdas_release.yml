@@ -241,6 +241,7 @@ jobs:
           echo "### Environment" >> $GITHUB_STEP_SUMMARY
           echo "- Environment: '${{ needs.determine-environment.outputs.environment }}'" >> $GITHUB_STEP_SUMMARY
           echo "- Is Manual: '${{ needs.determine-environment.outputs.is_manual }}'" >> $GITHUB_STEP_SUMMARY
+          echo "- Deploy region: '${{ needs.determine-environment.outputs.region }}' (all = each lambda's deploy.\${{ needs.determine-environment.outputs.environment }}.regions)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Python Lambdas" >> $GITHUB_STEP_SUMMARY
           echo "- Changed: '${{ needs.detect-changes.outputs.python-changed }}'" >> $GITHUB_STEP_SUMMARY
