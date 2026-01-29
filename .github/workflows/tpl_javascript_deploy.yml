@@ -14,19 +14,53 @@ on:
       environment:
         required: true
         type: string
+      region:
+        required: false
+        type: string
+        description: "Deploy to this region only, or 'all' (default). Manual runs: validate against deploy.<env>.regions"
+        default: 'all'
     secrets:
       AWS_ROLE_ARN:
         required: true
 
 jobs:
-  build-and-deploy:
-    name: Build and Deploy JavaScript Lambda - ${{ inputs.lambda_name }}
+  resolve-regions:
+    name: Resolve deploy regions
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: ${{ inputs.environment }}
+    outputs:
+      deploy_regions_json: ${{ steps.resolve.outputs.deploy_regions_json }}
+      primary_region: ${{ steps.resolve.outputs.primary_region }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Parse config (regions for environment)
+        id: parse
+        run: |
+          bash scripts/parse-lambda-config.sh "${{ inputs.lambda_path }}" "${{ inputs.lambda_name }}" "$GITHUB_OUTPUT" "${{ inputs.environment }}"
+
+      - name: Resolve regions and validate manual region
+        id: resolve
+        env:
+          REGIONS_JSON: ${{ steps.parse.outputs.regions_json }}
+        run: |
+          bash scripts/resolve-deploy-regions.sh "${{ inputs.region }}" "${{ vars.AWS_REGION }}" "${{ inputs.environment }}"
+
+  build:
+    name: Build JavaScript Lambda - ${{ inputs.lambda_name }}
+    runs-on: ubuntu-latest
+    needs: resolve-regions
     timeout-minutes: 15
     environment: ${{ inputs.environment }}
     permissions:
       id-token: write
       contents: read
+    outputs:
+      image_uri_primary: ${{ steps.image-uri.outputs.uri }}
+      tag: ${{ steps.set-tag.outputs.TAG }}
+      primary_region: ${{ needs.resolve-regions.outputs.primary_region }}
 
     steps:
       - name: Checkout code
@@ -37,18 +71,14 @@ jobs:
         run: |
           TIMESTAMP=$(date -u +'%Y.%m.%d-%H.%M')
           BRANCH="${{ github.event.inputs.branch || github.ref_name }}"
-          if [[ "${BRANCH}" == "master" ]]; then
-            echo "TAG=${TIMESTAMP}" >> $GITHUB_OUTPUT
-          else
-            echo "TAG=${TIMESTAMP}-SNAPSHOT" >> $GITHUB_OUTPUT
-          fi
+          [[ "${BRANCH}" == "master" ]] && echo "TAG=${TIMESTAMP}" >> $GITHUB_OUTPUT || echo "TAG=${TIMESTAMP}-SNAPSHOT" >> $GITHUB_OUTPUT
 
-      - name: Login to AWS
+      - name: Login to AWS (primary region)
         uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: GitHubActionsSession-${{ inputs.environment }}-${{ inputs.lambda_name }}
-          aws-region: ${{ vars.AWS_REGION }}
+          aws-region: ${{ needs.resolve-regions.outputs.primary_region }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -57,13 +87,13 @@ jobs:
         id: ecr-repo
         run: |
           ECR_REPO="lambda-${{ inputs.lambda_name }}-${{ inputs.environment }}"
+          REGISTRY="${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ needs.resolve-regions.outputs.primary_region }}.amazonaws.com"
           echo "repository=$ECR_REPO" >> $GITHUB_OUTPUT
-          echo "registry=${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com" >> $GITHUB_OUTPUT
+          echo "registry=$REGISTRY" >> $GITHUB_OUTPUT
 
-      - name: Ensure ECR repository exists
+      - name: Ensure ECR repository exists and set lifecycle policy
         run: |
-          aws ecr describe-repositories --repository-names ${{ steps.ecr-repo.outputs.repository }} --region ${{ vars.AWS_REGION }} || \
-          aws ecr create-repository --repository-name ${{ steps.ecr-repo.outputs.repository }} --region ${{ vars.AWS_REGION }}
+          bash scripts/ecr-ensure-repo.sh ${{ steps.ecr-repo.outputs.repository }} ${{ needs.resolve-regions.outputs.primary_region }}
 
       - name: Login to Amazon ECR
         uses: docker/login-action@v3
@@ -78,30 +108,8 @@ jobs:
 
       - name: Determine Docker platform
         id: docker-platform
-        working-directory: ${{ inputs.lambda_path }}
         run: |
-          # Map Lambda architecture to Docker platform
-          # Read from config if exists, otherwise default to x86_64
-          if [ -f lambda-config.yaml ]; then
-            if ! command -v yq &> /dev/null; then
-              wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-              chmod +x /usr/local/bin/yq
-            fi
-            ARCH=$(yq eval '.lambda.architectures // "x86_64"' lambda-config.yaml)
-          else
-            ARCH="x86_64"
-          fi
-
-          if [ "$ARCH" = "x86_64" ]; then
-            PLATFORM="linux/amd64"
-          elif [ "$ARCH" = "arm64" ]; then
-            PLATFORM="linux/arm64"
-          else
-            echo "::error::Unsupported architecture: $ARCH. Use x86_64 or arm64"
-            exit 1
-          fi
-          echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
-          echo "Building for platform: $PLATFORM"
+          bash scripts/determine-docker-platform.sh "${{ inputs.lambda_path }}"
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -110,7 +118,6 @@ jobs:
           file: lambdas/javascript/Dockerfile
           push: true
           platforms: ${{ steps.docker-platform.outputs.platform }}
-          # Disable provenance and SBOM to avoid multi-arch manifest issues with Lambda
           provenance: false
           sbom: false
           tags: |
@@ -124,67 +131,79 @@ jobs:
         run: |
           echo "uri=${{ steps.ecr-repo.outputs.registry }}/${{ steps.ecr-repo.outputs.repository }}:${{ steps.set-tag.outputs.TAG }}" >> $GITHUB_OUTPUT
 
+  deploy:
+    name: Deploy to ${{ matrix.region }}
+    runs-on: ubuntu-latest
+    needs: [resolve-regions, build]
+    timeout-minutes: 10
+    environment: ${{ inputs.environment }}
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      matrix:
+        region: ${{ fromJson(needs.resolve-regions.outputs.deploy_regions_json) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
       - name: Parse Lambda configuration
         id: lambda-config
         run: |
           bash scripts/parse-lambda-config.sh "${{ inputs.lambda_path }}" "${{ inputs.lambda_name }}"
 
+      - name: Login to AWS
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActionsSession-${{ inputs.environment }}-${{ inputs.lambda_name }}-${{ matrix.region }}
+          aws-region: ${{ matrix.region }}
+
+      - name: Ensure ECR repository exists and set lifecycle policy
+        run: |
+          bash scripts/ecr-ensure-repo.sh "lambda-${{ inputs.lambda_name }}-${{ inputs.environment }}" "${{ matrix.region }}"
+
+      - name: Get image URI for this region
+        id: image
+        run: |
+          bash scripts/ecr-copy-image-to-region.sh \
+            "${{ needs.build.outputs.primary_region }}" \
+            "${{ needs.build.outputs.image_uri_primary }}" \
+            "${{ needs.build.outputs.tag }}" \
+            "lambda-${{ inputs.lambda_name }}-${{ inputs.environment }}" \
+            "${{ matrix.region }}" \
+            "${{ vars.AWS_ACCOUNT_ID }}"
+
       - name: Build tags payload
         id: tags
         env:
           ENVIRONMENT: ${{ inputs.environment }}
-          REGION: ${{ vars.AWS_REGION }}
-          VERSION: ${{ steps.set-tag.outputs.TAG }}
+          REGION: ${{ matrix.region }}
+          VERSION: ${{ needs.build.outputs.tag }}
           LANGUAGE: javascript
           SERVICE: ${{ inputs.lambda_name }}
           CONFIG_TAGS: ${{ steps.lambda-config.outputs.config_tags }}
         run: |
-          DEFAULT_TAGS=$(jq -n \
-            --arg env "$ENVIRONMENT" \
-            --arg region "$REGION" \
-            --arg version "$VERSION" \
-            --arg language "$LANGUAGE" \
-            --arg service "$SERVICE" \
-            '{Environment:$env, Region:$region, Version:$version, Language:$language, Service:$service}')
-
-          # Parse CONFIG_TAGS, defaulting to {} if empty or invalid
-          if [ -z "$CONFIG_TAGS" ] || [ "$CONFIG_TAGS" = "null" ]; then
-            CONFIG_TAGS_JSON="{}"
-          else
-            # Validate and parse CONFIG_TAGS JSON
-            CONFIG_TAGS_JSON=$(echo "$CONFIG_TAGS" | jq -c '.' 2>/dev/null || echo "{}")
-          fi
-
-          # Merge default tags with config tags
+          DEFAULT_TAGS=$(jq -n --arg env "$ENVIRONMENT" --arg region "$REGION" --arg version "$VERSION" --arg language "$LANGUAGE" --arg service "$SERVICE" '{Environment:$env, Region:$region, Version:$version, Language:$language, Service:$service}')
+          CONFIG_TAGS_JSON=$(echo "$CONFIG_TAGS" | jq -c '.' 2>/dev/null || echo "{}")
           MERGED=$(jq -c -s 'reduce .[] as $item ({}; . * $item)' <(echo "$DEFAULT_TAGS") <(echo "$CONFIG_TAGS_JSON"))
           echo "tags=$MERGED" >> $GITHUB_OUTPUT
 
       - name: Determine Lambda execution role ARN
         id: lambda-role
         run: |
-          # Priority: lambda-config.yaml role_arn > LAMBDA_EXECUTION_ROLE_ARN secret > AWS_ROLE_ARN secret
-          # Note: AWS_ROLE_ARN is the GitHub Actions OIDC role, which may not be suitable for Lambda execution
-          if [ -n "${{ steps.lambda-config.outputs.role_arn }}" ]; then
-            ROLE_ARN="${{ steps.lambda-config.outputs.role_arn }}"
-          elif [ -n "${{ secrets.LAMBDA_EXECUTION_ROLE_ARN }}" ]; then
-            ROLE_ARN="${{ secrets.LAMBDA_EXECUTION_ROLE_ARN }}"
-          elif [ -n "${{ secrets.AWS_ROLE_ARN }}" ]; then
-            ROLE_ARN="${{ secrets.AWS_ROLE_ARN }}"
-          else
-            echo "::error::No Lambda execution role ARN found. Set role_arn in lambda-config.yaml or LAMBDA_EXECUTION_ROLE_ARN secret."
-            exit 1
-          fi
+          ROLE_ARN="${{ steps.lambda-config.outputs.role_arn }}"
+          [ -z "$ROLE_ARN" ] && ROLE_ARN="${{ secrets.LAMBDA_EXECUTION_ROLE_ARN }}"
+          [ -z "$ROLE_ARN" ] && ROLE_ARN="${{ secrets.AWS_ROLE_ARN }}"
+          [ -z "$ROLE_ARN" ] && echo "::error::No Lambda execution role ARN found." && exit 1
           echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
-          echo "Using Lambda execution role: $ROLE_ARN"
 
       - name: Deploy Lambda (image)
         uses: aws-actions/aws-lambda-deploy@v1.1.0
         with:
-          # TODO: remove the environment from the function name after testing
           function-name: "${{ steps.lambda-config.outputs.function_name }}-${{ inputs.environment }}"
           package-type: Image
-          image-uri: ${{ steps.image-uri.outputs.uri }}
-          # Lambda execution role ARN (must be a role that Lambda service can assume)
+          image-uri: ${{ steps.image.outputs.uri }}
           role: ${{ steps.lambda-role.outputs.role_arn }}
           function-description: ${{ steps.lambda-config.outputs.description }}
           timeout: ${{ steps.lambda-config.outputs.timeout }}
