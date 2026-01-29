@@ -81,3 +81,11 @@ lambda:
   # Tags (will be merged with dynamic tags: Environment, Region, Version, Language, Service)
   tags:
     Team: "platform"
+
+deploy:
+  dev:
+    regions: []
+  test:
+    regions: [eu-west-1, us-east-1]
+  prod:
+    regions: [eu-west-1, us-east-1]

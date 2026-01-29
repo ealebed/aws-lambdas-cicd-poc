@@ -15,6 +15,15 @@ on:
           - prod
         description: 'Target environment'
         default: dev
+      region:
+        required: false
+        type: choice
+        options:
+          - all
+          - eu-west-1
+          - us-east-1
+        description: 'Deploy to this region only, or all (from lambda deploy.<env>.regions). Validated for manual runs.'
+        default: all
       language:
         required: false
         type: choice
@@ -38,16 +47,19 @@ jobs:
     outputs:
       environment: ${{ steps.env.outputs.environment }}
       is_manual: ${{ steps.env.outputs.is_manual }}
+      region: ${{ steps.env.outputs.region }}
     steps:
-      - name: Determine environment
+      - name: Determine environment and region
         id: env
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "environment=${{ inputs.environment }}" >> $GITHUB_OUTPUT
             echo "is_manual=true" >> $GITHUB_OUTPUT
+            echo "region=${{ inputs.region }}" >> $GITHUB_OUTPUT
           else
             echo "environment=dev" >> $GITHUB_OUTPUT
             echo "is_manual=false" >> $GITHUB_OUTPUT
+            echo "region=all" >> $GITHUB_OUTPUT
           fi
 
   detect-changes:
@@ -260,6 +272,7 @@ jobs:
       lambda_path: lambdas/python/${{ matrix.lambda }}
       lambda_name: ${{ matrix.lambda }}
       environment: ${{ needs.determine-environment.outputs.environment }}
+      region: ${{ needs.determine-environment.outputs.region }}
     secrets:
       # arn:aws:iam::531438381462:role/github-oidc-terraform
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
@@ -279,6 +292,7 @@ jobs:
       lambda_path: lambdas/javascript/${{ matrix.lambda }}
       lambda_name: ${{ matrix.lambda }}
       environment: ${{ needs.determine-environment.outputs.environment }}
+      region: ${{ needs.determine-environment.outputs.region }}
     secrets:
       # arn:aws:iam::531438381462:role/github-oidc-terraform
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
@@ -298,6 +312,7 @@ jobs:
       lambda_path: lambdas/go/${{ matrix.lambda }}
       lambda_name: ${{ matrix.lambda }}
       environment: ${{ needs.determine-environment.outputs.environment }}
+      region: ${{ needs.determine-environment.outputs.region }}
     secrets:
       # arn:aws:iam::531438381462:role/github-oidc-terraform
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}

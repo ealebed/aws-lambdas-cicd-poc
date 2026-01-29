@@ -1,20 +1,22 @@
 #!/bin/bash
 # Parse lambda-config.yaml and output GitHub Actions outputs
-# Usage: parse-lambda-config.sh <lambda_path> <lambda_name> <output_file>
+# Usage: parse-lambda-config.sh <lambda_path> <lambda_name> [output_file] [environment]
 #
 # Arguments:
 #   lambda_path: Path to the Lambda function directory
 #   lambda_name: Default Lambda name (folder name)
 #   output_file: Path to GitHub Actions output file (default: $GITHUB_OUTPUT)
+#   environment: Optional. When set, reads deploy.<env>.regions and outputs regions_json, primary_region
 
 set -e
 
 LAMBDA_PATH="${1}"
 LAMBDA_NAME="${2}"
 OUTPUT_FILE="${3:-$GITHUB_OUTPUT}"
+ENVIRONMENT="${4:-}"
 
 if [ -z "$LAMBDA_PATH" ] || [ -z "$LAMBDA_NAME" ]; then
-  echo "Usage: parse-lambda-config.sh <lambda_path> <lambda_name> [output_file]"
+  echo "Usage: parse-lambda-config.sh <lambda_path> <lambda_name> [output_file] [environment]"
   exit 1
 fi
 
@@ -108,6 +110,16 @@ if [ -f "$CONFIG_FILE" ]; then
   if [ -n "$ROLE_ARN" ]; then
     echo "role_arn=$ROLE_ARN" >> "$OUTPUT_FILE"
   fi
+
+  # Deploy regions per environment (when environment is passed)
+  if [ -n "$ENVIRONMENT" ]; then
+    REGIONS_RAW=$(yq eval ".deploy.${ENVIRONMENT}.regions // []" "$CONFIG_FILE" 2>/dev/null || echo "[]")
+    REGIONS_JSON=$(echo "$REGIONS_RAW" | yq eval -o=json '.' 2>/dev/null || echo "[]")
+    REGIONS_JSON=$(echo "$REGIONS_JSON" | jq -c 'if type == "array" then . else [.] end' 2>/dev/null || echo "[]")
+    echo "regions_json=$REGIONS_JSON" >> "$OUTPUT_FILE"
+    PRIMARY=$(echo "$REGIONS_JSON" | jq -r 'if length > 0 then .[0] else "" end' 2>/dev/null || echo "")
+    echo "primary_region=$PRIMARY" >> "$OUTPUT_FILE"
+  fi
 else
   # Defaults if no config file
   echo "function_name=${LAMBDA_NAME}" >> "$OUTPUT_FILE"
@@ -119,4 +131,8 @@ else
   echo "publish=true" >> "$OUTPUT_FILE"
   echo "env_vars={}" >> "$OUTPUT_FILE"
   echo "config_tags={}" >> "$OUTPUT_FILE"
+  if [ -n "$ENVIRONMENT" ]; then
+    echo "regions_json=[]" >> "$OUTPUT_FILE"
+    echo "primary_region=" >> "$OUTPUT_FILE"
+  fi
 fi
