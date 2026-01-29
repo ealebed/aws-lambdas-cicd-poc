@@ -53,9 +53,9 @@ jobs:
         id: env
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "environment=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
             echo "is_manual=true" >> $GITHUB_OUTPUT
-            echo "region=${{ inputs.region }}" >> $GITHUB_OUTPUT
+            echo "region=${{ github.event.inputs.region }}" >> $GITHUB_OUTPUT
           else
             echo "environment=dev" >> $GITHUB_OUTPUT
             echo "is_manual=false" >> $GITHUB_OUTPUT
@@ -95,17 +95,17 @@ jobs:
       - name: Find changed Python Lambdas
         id: python-lambdas
         run: |
-          if [ "${{ needs.determine-environment.outputs.is_manual }}" == "true" ]; then
-            if [ "${{ inputs.language }}" == "all" ] || [ "${{ inputs.language }}" == "python" ]; then
-              if [ -n "${{ inputs.lambda_name }}" ]; then
-                LAMBDAS="[\"${{ inputs.lambda_name }}\"]"
+            if [ "${{ needs.determine-environment.outputs.is_manual }}" == "true" ]; then
+            if [ "${{ github.event.inputs.language }}" == "all" ] || [ "${{ github.event.inputs.language }}" == "python" ]; then
+              if [ -n "${{ github.event.inputs.lambda_name }}" ]; then
+                LAMBDAS="[\"${{ github.event.inputs.lambda_name }}\"]"
               else
                 LAMBDAS=$(find lambdas/python -mindepth 1 -maxdepth 1 -type d ! -name ".*" -exec basename {} \; | jq -R -s -c 'split("\n") | map(select(. != ""))')
               fi
             else
               LAMBDAS="[]"
             fi
-          else
+            else
             if [ "${{ steps.filter.outputs.python }}" == "true" ]; then
               # Use github.event.before if available (push event), otherwise fall back to HEAD~1
               if [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
@@ -123,23 +123,23 @@ jobs:
             else
               LAMBDAS="[]"
             fi
-          fi
-          echo "lambdas=$LAMBDAS" >> $GITHUB_OUTPUT
+            fi
+            echo "lambdas=$LAMBDAS" >> $GITHUB_OUTPUT
 
       - name: Find changed JavaScript Lambdas
         id: js-lambdas
         run: |
-          if [ "${{ needs.determine-environment.outputs.is_manual }}" == "true" ]; then
-            if [ "${{ inputs.language }}" == "all" ] || [ "${{ inputs.language }}" == "javascript" ]; then
-              if [ -n "${{ inputs.lambda_name }}" ]; then
-                LAMBDAS="[\"${{ inputs.lambda_name }}\"]"
+            if [ "${{ needs.determine-environment.outputs.is_manual }}" == "true" ]; then
+            if [ "${{ github.event.inputs.language }}" == "all" ] || [ "${{ github.event.inputs.language }}" == "javascript" ]; then
+              if [ -n "${{ github.event.inputs.lambda_name }}" ]; then
+                LAMBDAS="[\"${{ github.event.inputs.lambda_name }}\"]"
               else
                 LAMBDAS=$(find lambdas/javascript -mindepth 1 -maxdepth 1 -type d ! -name ".*" -exec basename {} \; | jq -R -s -c 'split("\n") | map(select(. != ""))')
               fi
             else
               LAMBDAS="[]"
             fi
-          else
+            else
             if [ "${{ steps.filter.outputs.javascript }}" == "true" ]; then
               # Use github.event.before if available (push event), otherwise fall back to HEAD~1
               if [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
@@ -157,23 +157,23 @@ jobs:
             else
               LAMBDAS="[]"
             fi
-          fi
-          echo "lambdas=$LAMBDAS" >> $GITHUB_OUTPUT
+            fi
+            echo "lambdas=$LAMBDAS" >> $GITHUB_OUTPUT
 
       - name: Find changed Go Lambdas
         id: go-lambdas
         run: |
-          if [ "${{ needs.determine-environment.outputs.is_manual }}" == "true" ]; then
-            if [ "${{ inputs.language }}" == "all" ] || [ "${{ inputs.language }}" == "go" ]; then
-              if [ -n "${{ inputs.lambda_name }}" ]; then
-                LAMBDAS="[\"${{ inputs.lambda_name }}\"]"
+            if [ "${{ needs.determine-environment.outputs.is_manual }}" == "true" ]; then
+            if [ "${{ github.event.inputs.language }}" == "all" ] || [ "${{ github.event.inputs.language }}" == "go" ]; then
+              if [ -n "${{ github.event.inputs.lambda_name }}" ]; then
+                LAMBDAS="[\"${{ github.event.inputs.lambda_name }}\"]"
               else
                 LAMBDAS=$(find lambdas/go -mindepth 1 -maxdepth 1 -type d ! -name ".*" -exec basename {} \; | jq -R -s -c 'split("\n") | map(select(. != ""))')
               fi
             else
               LAMBDAS="[]"
             fi
-          else
+            else
             if [ "${{ steps.filter.outputs.go }}" == "true" ]; then
               # Use github.event.before if available (push event), otherwise fall back to HEAD~1
               if [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
@@ -201,8 +201,8 @@ jobs:
               LAMBDAS="[]"
               echo "Debug: Go filter was false" >> $GITHUB_STEP_SUMMARY || true
             fi
-          fi
-          echo "lambdas=$LAMBDAS" >> $GITHUB_OUTPUT
+            fi
+            echo "lambdas=$LAMBDAS" >> $GITHUB_OUTPUT
 
   validate-manual-inputs:
     name: Validate Manual Inputs
@@ -216,12 +216,12 @@ jobs:
 
       - name: Validate inputs
         run: |
-          if [ "${{ inputs.language }}" != "all" ] && [ -z "${{ inputs.lambda_name }}" ]; then
+          if [ "${{ github.event.inputs.language }}" != "all" ] && [ -z "${{ github.event.inputs.lambda_name }}" ]; then
             echo "::error::lambda_name is required when language is not 'all'"
             exit 1
           fi
-          if [ "${{ inputs.language }}" != "all" ]; then
-            LAMBDA_PATH="lambdas/${{ inputs.language }}/${{ inputs.lambda_name }}"
+          if [ "${{ github.event.inputs.language }}" != "all" ]; then
+            LAMBDA_PATH="lambdas/${{ github.event.inputs.language }}/${{ github.event.inputs.lambda_name }}"
             if [ ! -d "$LAMBDA_PATH" ]; then
               echo "::error::Lambda function not found at $LAMBDA_PATH"
               exit 1
