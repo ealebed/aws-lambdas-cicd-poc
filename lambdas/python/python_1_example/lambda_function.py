@@ -29,7 +29,7 @@ def lambda_handler(event, context):
     logger.info(f"Request ID: {context.aws_request_id}")
 
     # Get environment variable if set
-    greeting = os.environ.get("GREETING", "Hello from default Python Lambda #1!")
+    greeting = os.environ.get("GREETING", "Hello from Python Lambda #1!")
 
     response = {
         "statusCode": 200,

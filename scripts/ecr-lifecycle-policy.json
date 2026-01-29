@@ -13,9 +13,9 @@
     },
     {
       "rulePriority": 2,
-      "description": "Keep only the most recent tagged image (always at least one)",
+      "description": "Keep only the most recent image (always at least one)",
       "selection": {
-        "tagStatus": "tagged",
+        "tagStatus": "any",
         "countType": "imageCountMoreThan",
         "countNumber": 1
       },
