@@ -17,7 +17,8 @@ exports.handler = async (event, context) => {
   console.log("Request ID:", context.awsRequestId);
 
   // Get environment variable if set
-  const greeting = process.env.GREETING || "Hello from JavaScript Lambda #2!";
+  const greeting =
+    process.env.GREETING || "Hello from default JavaScript Lambda #2!";
 
   const response = {
     statusCode: 200,

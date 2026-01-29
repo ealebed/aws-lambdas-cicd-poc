@@ -18,7 +18,7 @@ exports.handler = async (event, context) => {
 
   // Get environment variable if set
   const greeting =
-    process.env.GREETING || "Hello from DEFAULT JavaScript Lambda #1!";
+    process.env.GREETING || "Hello from default JavaScript Lambda #1!";
 
   const response = {
     statusCode: 200,
