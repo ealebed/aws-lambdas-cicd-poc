@@ -370,65 +370,65 @@ See [docs/lambda-execution-role-setup.md](docs/lambda-execution-role-setup.md) f
 }
 ```
 
-#### Required IAM Permissions for GitHub Actions Role
+#### Required IAM Permissions for GitHub Actions (Deploy) Role
 
-The GitHub Actions role needs the following permissions:
+The deploy role (GitHub Actions OIDC role) needs the following permissions. For **multi-region** deploy, this role must have these permissions in **every target region** (ECR and Lambda are regional).
 
 ```json
 {
   "Version": "2012-10-17",
   "Statement": [
     {
+      "Sid": "ECRAccess",
       "Effect": "Allow",
       "Action": [
-        "ecr:GetAuthorizationToken",
         "ecr:BatchCheckLayerAvailability",
-        "ecr:GetDownloadUrlForLayer",
         "ecr:BatchGetImage",
-        "ecr:PutImage",
-        "ecr:InitiateLayerUpload",
-        "ecr:UploadLayerPart",
         "ecr:CompleteLayerUpload",
         "ecr:CreateRepository",
-        "ecr:DescribeRepositories"
+        "ecr:DeleteRepositoryPolicy",
+        "ecr:DescribeRepositories",
+        "ecr:GetAuthorizationToken",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:GetRepositoryPolicy",
+        "ecr:InitiateLayerUpload",
+        "ecr:PutImage",
+        "ecr:SetRepositoryPolicy",
+        "ecr:UploadLayerPart",
+        "ecr:PutLifecyclePolicy"
       ],
-      "Resource": "*"
+      "Resource": ["*"]
     },
     {
+      "Sid": "LambdaDeploy",
       "Effect": "Allow",
       "Action": [
         "lambda:CreateFunction",
-        "lambda:UpdateFunctionCode",
-        "lambda:UpdateFunctionConfiguration",
         "lambda:GetFunction",
-        "lambda:TagResource"
+        "lambda:GetFunctionConfiguration",
+        "lambda:ListTags",
+        "lambda:PublishVersion",
+        "lambda:TagResource",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration"
       ],
-      "Resource": "arn:aws:lambda:*:*:function:*"
+      "Resource": ["arn:aws:lambda:*:*:function:*"]
     },
     {
+      "Sid": "PassRolesDefinition",
       "Effect": "Allow",
-      "Action": [
-        "iam:PassRole"
-      ],
-      "Resource": [
-        "arn:aws:iam::<ACCOUNT_ID>:role/lambda-execution-role",
-        "arn:aws:iam::<ACCOUNT_ID>:role/github-actions-role"
-      ],
-      "Condition": {
-        "StringEquals": {
-          "iam:PassedToService": "lambda.amazonaws.com"
-        }
-      }
+      "Action": ["iam:PassRole"],
+      "Resource": ["arn:aws:iam::<ACCOUNT_ID>:role/lambda-execution-role"]
     }
   ]
 }
 ```
 
 **Important Notes**:
-- The role must be able to pass the Lambda execution role to Lambda (the `iam:PassRole` permission)
-- Replace `<ACCOUNT_ID>` with your actual AWS account ID
-- ECR repositories are automatically created if they don't exist (requires `ecr:CreateRepository` permission)
-- CloudWatch Logs permissions are NOT needed here - they belong to the Lambda execution role
+- Replace `<ACCOUNT_ID>` with your AWS account ID.
+- ECR: create repo, push images, and apply lifecycle policy (`ecr:PutLifecyclePolicy`).
+- Lambda: create/update function, publish version, and update tags (`lambda:TagResource`, `lambda:GetFunctionConfiguration`).
+- The role must be able to pass the Lambda execution role to Lambda (`iam:PassRole`).
 
 ### Lambda Execution Role Setup
 
@@ -452,23 +452,30 @@ The Lambda execution role is used by Lambda service to execute your function. Se
 }
 ```
 
-2. **Minimum Permissions** (for basic Lambda execution):
+2. **Minimum Permissions** (for container-image Lambdas):
+
+   - **ECR image retrieval** (Lambda pulls the image from ECR at runtime):
+
 ```json
 {
   "Version": "2012-10-17",
   "Statement": [
     {
+      "Sid": "LambdaECRImageRetrievalPolicy",
       "Effect": "Allow",
       "Action": [
-        "logs:CreateLogGroup",
-        "logs:CreateLogStream",
-        "logs:PutLogEvents"
+        "ecr:BatchGetImage",
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetAuthorizationToken",
+        "ecr:GetDownloadUrlForLayer"
       ],
-      "Resource": "arn:aws:logs:*:*:*"
+      "Resource": ["*"]
     }
   ]
 }
 ```
+
+   - **CloudWatch Logs** (recommended): Attach the AWS managed policy **`AWSLambdaBasicExecutionRole`**, or use an inline policy with `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents` on `arn:aws:logs:*:*:*`.
 
 3. **Configuration**:
    - Set `LAMBDA_EXECUTION_ROLE_ARN` secret in GitHub environment, OR
