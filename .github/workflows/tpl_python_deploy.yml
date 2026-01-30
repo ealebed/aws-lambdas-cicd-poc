@@ -60,7 +60,6 @@ jobs:
     outputs:
       image_uri_primary: ${{ steps.image-uri.outputs.uri }}
       tag: ${{ steps.set-tag.outputs.TAG }}
-      ecr_repo_name: ${{ steps.ecr-repo.outputs.repository }}
       primary_region: ${{ needs.resolve-regions.outputs.primary_region }}
 
     steps:
@@ -72,11 +71,7 @@ jobs:
         run: |
           TIMESTAMP=$(date -u +'%Y.%m.%d-%H.%M')
           BRANCH="${{ github.event.inputs.branch || github.ref_name }}"
-          if [[ "${BRANCH}" == "master" ]]; then
-            echo "TAG=${TIMESTAMP}" >> $GITHUB_OUTPUT
-          else
-            echo "TAG=${TIMESTAMP}-SNAPSHOT" >> $GITHUB_OUTPUT
-          fi
+          [[ "${BRANCH}" == "master" ]] && echo "TAG=${TIMESTAMP}" >> $GITHUB_OUTPUT || echo "TAG=${TIMESTAMP}-SNAPSHOT" >> $GITHUB_OUTPUT
 
       - name: Login to AWS (primary region)
         uses: aws-actions/configure-aws-credentials@v5
@@ -189,13 +184,7 @@ jobs:
           SERVICE: ${{ inputs.lambda_name }}
           CONFIG_TAGS: ${{ steps.lambda-config.outputs.config_tags }}
         run: |
-          DEFAULT_TAGS=$(jq -n \
-            --arg env "$ENVIRONMENT" \
-            --arg region "$REGION" \
-            --arg version "$VERSION" \
-            --arg language "$LANGUAGE" \
-            --arg service "$SERVICE" \
-            '{Environment:$env, Region:$region, Version:$version, Language:$language, Service:$service}')
+          DEFAULT_TAGS=$(jq -n --arg env "$ENVIRONMENT" --arg region "$REGION" --arg version "$VERSION" --arg language "$LANGUAGE" --arg service "$SERVICE" '{Environment:$env, Region:$region, Version:$version, Language:$language, Service:$service}')
           CONFIG_TAGS_JSON=$(echo "$CONFIG_TAGS" | jq -c '.' 2>/dev/null || echo "{}")
           MERGED=$(jq -c -s 'reduce .[] as $item ({}; . * $item)' <(echo "$DEFAULT_TAGS") <(echo "$CONFIG_TAGS_JSON"))
           echo "tags=$MERGED" >> $GITHUB_OUTPUT
@@ -203,16 +192,10 @@ jobs:
       - name: Determine Lambda execution role ARN
         id: lambda-role
         run: |
-          if [ -n "${{ steps.lambda-config.outputs.role_arn }}" ]; then
-            ROLE_ARN="${{ steps.lambda-config.outputs.role_arn }}"
-          elif [ -n "${{ secrets.LAMBDA_EXECUTION_ROLE_ARN }}" ]; then
-            ROLE_ARN="${{ secrets.LAMBDA_EXECUTION_ROLE_ARN }}"
-          elif [ -n "${{ secrets.AWS_ROLE_ARN }}" ]; then
-            ROLE_ARN="${{ secrets.AWS_ROLE_ARN }}"
-          else
-            echo "::error::No Lambda execution role ARN found."
-            exit 1
-          fi
+          ROLE_ARN="${{ steps.lambda-config.outputs.role_arn }}"
+          [ -z "$ROLE_ARN" ] && ROLE_ARN="${{ secrets.LAMBDA_EXECUTION_ROLE_ARN }}"
+          [ -z "$ROLE_ARN" ] && ROLE_ARN="${{ secrets.AWS_ROLE_ARN }}"
+          [ -z "$ROLE_ARN" ] && echo "::error::No Lambda execution role ARN found." && exit 1
           echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
 
       - name: Deploy Lambda (image)
