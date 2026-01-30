@@ -216,6 +216,7 @@ jobs:
           echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
 
       - name: Deploy Lambda (image)
+        id: deploy
         uses: aws-actions/aws-lambda-deploy@v1.1.0
         with:
           function-name: "${{ steps.lambda-config.outputs.function_name }}-${{ inputs.environment }}"
@@ -239,3 +240,11 @@ jobs:
           code-signing-config-arn: ${{ steps.lambda-config.outputs.code_signing_config_arn }}
           publish: ${{ steps.lambda-config.outputs.publish }}
           tags: ${{ steps.tags.outputs.tags }}
+
+      - name: Update Lambda tags (Version, etc.)
+        run: |
+          FUNCTION_ARN="${{ steps.deploy.outputs.function-arn }}"
+          if [ -z "$FUNCTION_ARN" ]; then
+            FUNCTION_ARN="arn:aws:lambda:${{ matrix.region }}:${{ vars.AWS_ACCOUNT_ID }}:function:${{ steps.lambda-config.outputs.function_name }}-${{ inputs.environment }}"
+          fi
+          aws lambda tag-resource --resource "$FUNCTION_ARN" --tags '${{ steps.tags.outputs.tags }}'
