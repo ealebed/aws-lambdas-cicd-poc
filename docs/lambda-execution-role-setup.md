@@ -34,23 +34,30 @@ You need **two separate IAM roles** for Lambda deployment:
 
 ### Step 2: Attach Permissions Policy
 
-**Minimum Required Permissions** (for basic Lambda execution):
+**For container-image Lambdas** (this repo uses ECR images), the execution role needs:
+
+1. **ECR image retrieval** (Lambda pulls the image from ECR at runtime):
+
 ```json
 {
     "Version": "2012-10-17",
     "Statement": [
         {
+            "Sid": "LambdaECRImageRetrievalPolicy",
             "Effect": "Allow",
             "Action": [
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:PutLogEvents"
+                "ecr:BatchGetImage",
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetAuthorizationToken",
+                "ecr:GetDownloadUrlForLayer"
             ],
-            "Resource": "arn:aws:logs:*:*:*"
+            "Resource": ["*"]
         }
     ]
 }
 ```
+
+2. **CloudWatch Logs**: Attach the AWS managed policy **`AWSLambdaBasicExecutionRole`**, or use an inline policy with `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents` on `arn:aws:logs:*:*:*`.
 
 **If using X-Ray tracing**, add:
 ```json
