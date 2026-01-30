@@ -13,9 +13,21 @@
     },
     {
       "rulePriority": 2,
-      "description": "Keep only the most recent image (always at least one)",
+      "description": "Keep 5 recent deployment image (date tag)",
       "selection": {
-        "tagStatus": "any",
+        "tagStatus": "tagged",
+        "tagPrefixList": ["202"],
+        "countType": "imageCountMoreThan",
+        "countNumber": 5
+      },
+      "action": { "type": "expire" }
+    },
+    {
+      "rulePriority": 3,
+      "description": "Keep only the most recent buildcache or latest",
+      "selection": {
+        "tagStatus": "tagged",
+        "tagPrefixList": ["buildcache", "latest"],
         "countType": "imageCountMoreThan",
         "countNumber": 1
       },
