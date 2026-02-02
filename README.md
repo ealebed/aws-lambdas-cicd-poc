@@ -12,11 +12,9 @@ aws-lambdas-cicd-poc/
 │       ├── wfl_pr_validation.yml      # CI: PR validation workflow
 │       ├── wfl_lambdas_release.yml     # CD: Release workflow (auto DEV, manual TEST/PROD)
 │       ├── tpl_python_validation.yml   # Reusable: Python validation
-│       ├── tpl_python_deploy.yml       # Reusable: Python deployment
+│       ├── tpl_lambda_deploy.yml       # Reusable: Lambda deployment (python/javascript/go)
 │       ├── tpl_javascript_validation.yml # Reusable: JavaScript validation
-│       ├── tpl_javascript_deploy.yml    # Reusable: JavaScript deployment
-│       ├── tpl_go_validation.yml       # Reusable: Go validation
-│       └── tpl_go_deploy.yml           # Reusable: Go deployment
+│       └── tpl_go_validation.yml       # Reusable: Go validation
 ├── lambdas/
 │   ├── python/
 │   │   ├── Dockerfile             # Shared Python Dockerfile
@@ -149,9 +147,7 @@ All reusable workflows use `workflow_call` and can be called from other workflow
 
 ### Deployment Workflows (Templates)
 
-- `tpl_python_deploy.yml`: Build and deploy Python Lambda containers
-- `tpl_javascript_deploy.yml`: Build and deploy JavaScript Lambda containers
-- `tpl_go_deploy.yml`: Build and deploy Go Lambda containers
+- `tpl_lambda_deploy.yml`: Build and deploy Lambda containers (Python, JavaScript, or Go; language passed as input)
 
 **Note**: The main workflows (`wfl_pr_validation.yml`, `wfl_lambdas_release.yml`) call these reusable workflow templates using `uses:` instead of duplicating logic.
 

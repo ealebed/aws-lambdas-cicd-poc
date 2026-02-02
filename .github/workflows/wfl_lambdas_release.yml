@@ -265,11 +265,12 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    uses: ./.github/workflows/tpl_python_deploy.yml
+    uses: ./.github/workflows/tpl_lambda_deploy.yml
     strategy:
       matrix:
         lambda: ${{ fromJson(needs.detect-changes.outputs.python-lambdas) }}
     with:
+      language: python
       lambda_path: lambdas/python/${{ matrix.lambda }}
       lambda_name: ${{ matrix.lambda }}
       environment: ${{ needs.determine-environment.outputs.environment }}
@@ -285,11 +286,12 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    uses: ./.github/workflows/tpl_javascript_deploy.yml
+    uses: ./.github/workflows/tpl_lambda_deploy.yml
     strategy:
       matrix:
         lambda: ${{ fromJson(needs.detect-changes.outputs.js-lambdas) }}
     with:
+      language: javascript
       lambda_path: lambdas/javascript/${{ matrix.lambda }}
       lambda_name: ${{ matrix.lambda }}
       environment: ${{ needs.determine-environment.outputs.environment }}
@@ -305,11 +307,12 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    uses: ./.github/workflows/tpl_go_deploy.yml
+    uses: ./.github/workflows/tpl_lambda_deploy.yml
     strategy:
       matrix:
         lambda: ${{ fromJson(needs.detect-changes.outputs.go-lambdas) }}
     with:
+      language: go
       lambda_path: lambdas/go/${{ matrix.lambda }}
       lambda_name: ${{ matrix.lambda }}
       environment: ${{ needs.determine-environment.outputs.environment }}
