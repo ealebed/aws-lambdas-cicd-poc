@@ -46,7 +46,7 @@ func Handler(ctx context.Context, event map[string]interface{}) (Response, error
 	// Get environment variable if set
 	greeting := os.Getenv("GREETING")
 	if greeting == "" {
-		greeting = "Hello from Go default Lambda #1!"
+		greeting = "Hello from Go Lambda #1!"
 	}
 
 	body := ResponseBody{
