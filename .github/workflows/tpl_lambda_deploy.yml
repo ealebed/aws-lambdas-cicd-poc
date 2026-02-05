@@ -78,7 +78,7 @@ jobs:
           [[ "${BRANCH}" == "master" ]] && echo "TAG=${TIMESTAMP}" >> $GITHUB_OUTPUT || echo "TAG=${TIMESTAMP}-SNAPSHOT" >> $GITHUB_OUTPUT
 
       - name: Login to AWS (primary region)
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: GitHubActionsSession-${{ inputs.environment }}-${{ inputs.lambda_name }}
@@ -170,7 +170,7 @@ jobs:
           bash scripts/parse-lambda-config.sh "${{ inputs.lambda_path }}" "${{ inputs.lambda_name }}"
 
       - name: Login to AWS
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: GitHubActionsSession-${{ inputs.environment }}-${{ inputs.lambda_name }}-${{ matrix.region }}
