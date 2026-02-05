@@ -14,7 +14,7 @@ lambda:
   memory_size: 512  # MB (128-10240, must be multiple of 64)
   timeout: 60       # seconds (1-900)
   ephemeral_storage: 1024  # MB (512-10240)
-  architectures: x86_64  # x86_64 or arm64
+  architectures: arm64  # x86_64 or arm64
 
   # Environment variables
   environment:
