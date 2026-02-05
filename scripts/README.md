@@ -8,6 +8,6 @@ Shared scripts used by the templated deploy workflows (Python, JavaScript, Go). 
 | `resolve-deploy-regions.sh` | Resolve deploy region list and validate manual region. Env: `REGIONS_JSON`. Outputs: `deploy_regions_json`, `primary_region`. |
 | `determine-docker-platform.sh` | Map `lambda.architectures` to Docker platform (`linux/amd64` or `linux/arm64`). Default: arm64. Output: `platform`. |
 | `ecr-ensure-repo.sh` | Create ECR repo if missing and apply lifecycle policy (default: `scripts/ecr-lifecycle-policy.json`). |
-| `ecr-copy-image-to-region.sh` | Output image URI for a region: use primary URI if same region, else pull from primary ECR and push to current region. Copy retries (3x, backoff) on push failure; after push, waits 15s for ECR eventual consistency then verifies (up to 3 verify retries, no re-push). Output: `uri`. |
+| `ecr-copy-image-to-region.sh` | Output image URI for a region: use primary URI if same region, else pull from primary ECR and push to current region. Copy retries (3x, backoff) on push failure; after push, waits 45s then verifies (up to 8 attempts, 15s apart). On verify failure, logs last describe-images output. Set `SKIP_VERIFY_ON_PUSH_SUCCESS=1` to succeed when push succeeded but verify never passes. Output: `uri`. |
 
 All scripts write to `$GITHUB_OUTPUT` by default when an output file is not passed.
