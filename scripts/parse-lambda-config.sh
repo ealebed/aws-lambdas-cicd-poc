@@ -40,7 +40,7 @@ if [ -f "$CONFIG_FILE" ]; then
   MEMORY_SIZE=$(yq eval '.lambda.memory_size // 256' "$CONFIG_FILE")
   TIMEOUT=$(yq eval '.lambda.timeout // 30' "$CONFIG_FILE")
   EPHEMERAL_STORAGE=$(yq eval '.lambda.ephemeral_storage // 512' "$CONFIG_FILE")
-  ARCHITECTURES=$(yq eval '.lambda.architectures // "x86_64"' "$CONFIG_FILE")
+  ARCHITECTURES=$(yq eval '.lambda.architectures // "arm64"' "$CONFIG_FILE")
   PUBLISH=$(yq eval '.lambda.publish // true' "$CONFIG_FILE")
 
   echo "function_name=$FUNCTION_NAME" >> "$OUTPUT_FILE"
@@ -127,7 +127,7 @@ else
   echo "memory_size=256" >> "$OUTPUT_FILE"
   echo "timeout=30" >> "$OUTPUT_FILE"
   echo "ephemeral_storage=512" >> "$OUTPUT_FILE"
-  echo "architectures=x86_64" >> "$OUTPUT_FILE"
+  echo "architectures=arm64" >> "$OUTPUT_FILE"
   echo "publish=true" >> "$OUTPUT_FILE"
   echo "env_vars={}" >> "$OUTPUT_FILE"
   echo "config_tags={}" >> "$OUTPUT_FILE"

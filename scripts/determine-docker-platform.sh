@@ -21,9 +21,9 @@ if [ -f "$CONFIG_FILE" ]; then
     wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
     chmod +x /usr/local/bin/yq
   fi
-  ARCH=$(yq eval '.lambda.architectures // "x86_64"' "$CONFIG_FILE")
+  ARCH=$(yq eval '.lambda.architectures // "arm64"' "$CONFIG_FILE")
 else
-  ARCH="x86_64"
+  ARCH="arm64"
 fi
 
 case "$ARCH" in
