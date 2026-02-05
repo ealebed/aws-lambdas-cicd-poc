@@ -1,6 +1,6 @@
 #!/bin/bash
 # Output image URI for a given region: use primary URI if same region, else pull from primary ECR and push to current region.
-# Uses retries with backoff and verifies the image exists in the target region after push.
+# Uses retries for copy failures; after push, waits for ECR eventual consistency then verifies (verify retries without re-pushing).
 #
 # Usage: ecr-copy-image-to-region.sh <primary_region> <image_uri_primary> <tag> <ecr_repo_name> <current_region> <aws_account_id> [output_file]
 # Output: uri=<image_uri>
@@ -15,8 +15,12 @@ CURRENT_REGION="${5}"
 AWS_ACCOUNT_ID="${6}"
 OUTPUT_FILE="${7:-$GITHUB_OUTPUT}"
 
-MAX_ATTEMPTS=3
-BACKOFF_SECONDS=10
+MAX_COPY_ATTEMPTS=3
+COPY_BACKOFF_SECONDS=10
+# ECR describe-images is eventually consistent; wait after push before first verify
+POST_PUSH_DELAY_SECONDS=15
+MAX_VERIFY_ATTEMPTS=3
+VERIFY_RETRY_DELAY_SECONDS=10
 
 if [ -z "$PRIMARY_REGION" ] || [ -z "$IMAGE_URI_PRIMARY" ] || [ -z "$ECR_REPO" ] || [ -z "$CURRENT_REGION" ] || [ -z "$AWS_ACCOUNT_ID" ]; then
   echo "Usage: ecr-copy-image-to-region.sh <primary_region> <image_uri_primary> <tag> <ecr_repo_name> <current_region> <aws_account_id> [output_file]"
@@ -50,28 +54,48 @@ verify_image_in_region() {
     --output text >/dev/null 2>&1
 }
 
-attempt=1
-while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
+# Retry only verification (no re-push). ECR is eventually consistent after push.
+verify_with_retries() {
+  echo "Waiting ${POST_PUSH_DELAY_SECONDS}s for ECR eventual consistency..."
+  sleep "$POST_PUSH_DELAY_SECONDS"
+  v=1
+  while [ "$v" -le "$MAX_VERIFY_ATTEMPTS" ]; do
+    if verify_image_in_region; then
+      return 0
+    fi
+    echo "::warning::Image not yet visible in $CURRENT_REGION (verify $v/$MAX_VERIFY_ATTEMPTS)"
+    if [ "$v" -lt "$MAX_VERIFY_ATTEMPTS" ]; then
+      echo "Retrying verify in ${VERIFY_RETRY_DELAY_SECONDS}s..."
+      sleep "$VERIFY_RETRY_DELAY_SECONDS"
+    fi
+    v=$((v + 1))
+  done
+  return 1
+}
+
+copy_attempt=1
+copy_backoff=$COPY_BACKOFF_SECONDS
+while [ "$copy_attempt" -le "$MAX_COPY_ATTEMPTS" ]; do
   set +e
   do_copy
   copy_ok=$?
   set -e
   if [ "$copy_ok" -eq 0 ]; then
-    if verify_image_in_region; then
+    if verify_with_retries; then
       echo "uri=$TARGET_URI" >> "$OUTPUT_FILE"
       exit 0
     fi
-    echo "::warning::Push reported success but image not found in $CURRENT_REGION (attempt $attempt/$MAX_ATTEMPTS)"
+    echo "::warning::Push succeeded but image still not visible after ${MAX_VERIFY_ATTEMPTS} verify attempts (copy attempt $copy_attempt/$MAX_COPY_ATTEMPTS)"
   else
-    echo "::warning::ECR copy attempt $attempt/$MAX_ATTEMPTS failed"
+    echo "::warning::ECR copy attempt $copy_attempt/$MAX_COPY_ATTEMPTS failed"
   fi
-  if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-    echo "Retrying in ${BACKOFF_SECONDS}s..."
-    sleep "$BACKOFF_SECONDS"
-    BACKOFF_SECONDS=$((BACKOFF_SECONDS * 2))
+  if [ "$copy_attempt" -lt "$MAX_COPY_ATTEMPTS" ]; then
+    echo "Retrying copy in ${copy_backoff}s..."
+    sleep "$copy_backoff"
+    copy_backoff=$((copy_backoff * 2))
   fi
-  attempt=$((attempt + 1))
+  copy_attempt=$((copy_attempt + 1))
 done
 
-echo "::error::ECR copy failed after $MAX_ATTEMPTS attempts (primary=$PRIMARY_REGION, target=$CURRENT_REGION, repo=$ECR_REPO, tag=$TAG)"
+echo "::error::ECR copy failed after $MAX_COPY_ATTEMPTS attempts (primary=$PRIMARY_REGION, target=$CURRENT_REGION, repo=$ECR_REPO, tag=$TAG)"
 exit 1
