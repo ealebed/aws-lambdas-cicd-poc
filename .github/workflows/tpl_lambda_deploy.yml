@@ -85,7 +85,7 @@ jobs:
           aws-region: ${{ needs.resolve-regions.outputs.primary_region }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Determine ECR repository
         id: ecr-repo
