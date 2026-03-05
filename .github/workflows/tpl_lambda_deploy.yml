@@ -100,7 +100,7 @@ jobs:
           bash scripts/ecr-ensure-repo.sh ${{ steps.ecr-repo.outputs.repository }} ${{ needs.resolve-regions.outputs.primary_region }}
 
       - name: Login to Amazon ECR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ steps.ecr-repo.outputs.registry }}
           ecr: auto
