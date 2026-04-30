@@ -1,5 +1,5 @@
 # Use AWS Lambda Python base image
-FROM public.ecr.aws/lambda/python:3.13.2026.04.27.23
+FROM public.ecr.aws/lambda/python:3.13.2026.04.30.18
 
 # Copy function code
 COPY lambda_function.py ${LAMBDA_TASK_ROOT}
