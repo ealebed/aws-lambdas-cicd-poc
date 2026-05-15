@@ -217,7 +217,7 @@ jobs:
 
       - name: Deploy Lambda (image)
         id: deploy
-        uses: aws-actions/aws-lambda-deploy@v1.1.1
+        uses: aws-actions/aws-lambda-deploy@v1.1.2
         with:
           function-name: "${{ steps.lambda-config.outputs.function_name }}-${{ inputs.environment }}"
           package-type: Image
