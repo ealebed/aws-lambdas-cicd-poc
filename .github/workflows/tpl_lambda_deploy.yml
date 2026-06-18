@@ -38,7 +38,7 @@ jobs:
       primary_region: ${{ steps.resolve.outputs.primary_region }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Parse config (regions for environment)
         id: parse
@@ -68,7 +68,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Decide on tag
         id: set-tag
@@ -162,7 +162,7 @@ jobs:
         region: ${{ fromJson(needs.resolve-regions.outputs.deploy_regions_json) }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Parse Lambda configuration
         id: lambda-config
