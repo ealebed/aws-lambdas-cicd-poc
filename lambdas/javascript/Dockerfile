@@ -1,5 +1,5 @@
 # Use AWS Lambda Node.js base image
-FROM public.ecr.aws/lambda/nodejs:24
+FROM public.ecr.aws/lambda/nodejs:26
 
 # Copy function code
 COPY index.js ${LAMBDA_TASK_ROOT}
