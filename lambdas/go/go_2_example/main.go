@@ -40,9 +40,6 @@ func Handler(ctx context.Context, event map[string]interface{}) (Response, error
 		requestID = lc.AwsRequestID
 	}
 
-	log.Printf("Function name: %s", functionName)
-	log.Printf("Request ID: %s", requestID)
-
 	// Get environment variable if set
 	greeting := os.Getenv("GREETING")
 	if greeting == "" {
