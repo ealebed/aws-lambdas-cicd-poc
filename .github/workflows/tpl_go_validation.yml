@@ -28,7 +28,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.25.0'
+          go-version-file: ${{ inputs.lambda_path }}/go.mod
 
       - name: Run go fmt check
         working-directory: ${{ inputs.lambda_path }}
@@ -58,7 +58,7 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.7
+          version: v2.13.1
           working-directory: ${{ inputs.lambda_path }}
           args: --timeout 4m --config ${{ github.workspace }}/lambdas/go/.golangci.yaml
           only-new-issues: false

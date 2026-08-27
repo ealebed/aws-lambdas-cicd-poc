@@ -64,7 +64,7 @@ aws-lambdas-cicd-poc/
 
 ## Key Features
 
-- **Multi-language support**: Python 3.13, Node.js 24, Go 1.25
+- **Multi-language support**: Python 3.13, Node.js 24, Go 1.27
 - **Container-based deployment**: Uses official AWS Lambda base images from ECR Public
 - **Automatic validation**: PR validation with format, lint, and test checks
 - **Automatic DEV deployment**: Deploys to DEV environment on merge to master
@@ -85,7 +85,7 @@ aws-lambdas-cicd-poc/
 
 - **Python**: 3.13 (using `public.ecr.aws/lambda/python:3.13`)
 - **Node.js**: 24.x (using `public.ecr.aws/lambda/nodejs:24`)
-- **Go**: 1.25.0 (using `public.ecr.aws/lambda/provided:al2023`)
+- **Go**: 1.27.0 (using `public.ecr.aws/lambda/provided:al2023`)
 
 ## Workflows
 
@@ -732,7 +732,7 @@ All Dockerfiles use official AWS Lambda base images:
 
 - **Python**: `lambdas/python/Dockerfile` - Uses `public.ecr.aws/lambda/python:3.13`
 - **JavaScript**: `lambdas/javascript/Dockerfile` - Uses `public.ecr.aws/lambda/nodejs:24`
-- **Go**: `lambdas/go/Dockerfile` - Uses `public.ecr.aws/lambda/provided:al2023` (runtime) and `golang:1.25-alpine` (build stage)
+- **Go**: `lambdas/go/Dockerfile` - Uses `public.ecr.aws/lambda/provided:al2023` (runtime) and `golang:1.27-alpine` (build stage)
 
 **Important**:
 - Docker images are built with `provenance: false` and `sbom: false` to ensure compatibility with AWS Lambda, which doesn't support multi-architecture manifest lists

@@ -121,7 +121,7 @@ jobs:
         if: inputs.language == 'go'
         uses: actions/setup-go@v7
         with:
-          go-version: '1.25.0'
+          go-version-file: ${{ inputs.lambda_path }}/go.mod
 
       - name: Determine Docker platform
         id: docker-platform
