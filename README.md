@@ -100,7 +100,10 @@ aws-lambdas-cicd-poc/
   - **JavaScript**: Prettier formatting, ESLint linting, Jest tests
   - **Go**: gofmt, go vet, golangci-lint, go tests with race detector
 
-**Path-based triggering**: Only runs validation for Lambdas with changes in their directory.
+**Path-based triggering**: Only runs validation for Lambdas with changes in their directory. The `PR checks` job always runs and is the merge gate (detect succeeded, and any language validation that ran also succeeded).
+
+## Dependabot automation
+Minor and patch Dependabot PRs are approved and squash-merged by a GitHub App after required CI passes. See [Dependabot automation](./docs/dependabot-automation.md).
 
 ### 2. Release Deployment (`wfl_lambdas_release.yml`)
 

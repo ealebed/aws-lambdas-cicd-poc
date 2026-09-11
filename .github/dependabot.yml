@@ -5,14 +5,26 @@ updates:
       - "lambdas/go/*"
     schedule:
       interval: "daily"
+    assignees:
+      - "ealebed"
+    labels:
+      - "dependencies"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "daily"
+    assignees:
+      - "ealebed"
+    labels:
+      - "dependencies"
 
   - package-ecosystem: "docker"
     directories:
       - "lambdas/*"
     schedule:
       interval: "daily"
+    assignees:
+      - "ealebed"
+    labels:
+      - "dependencies"
