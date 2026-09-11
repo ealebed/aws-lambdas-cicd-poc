@@ -121,3 +121,40 @@ jobs:
     with:
       lambda_path: lambdas/go/${{ matrix.lambda }}
       lambda_name: ${{ matrix.lambda }}
+
+  # Always runs so branch protection has one check that waits for language
+  # validation when it ran, and still reports on Actions / Dockerfile-only PRs
+  # where validate-* jobs are skipped.
+  pr-ok:
+    name: PR checks
+    needs:
+      - detect-changes
+      - validate-python
+      - validate-javascript
+      - validate-go
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require detect success and no failed validations
+        run: |
+          detect='${{ needs.detect-changes.result }}'
+          py='${{ needs.validate-python.result }}'
+          js='${{ needs.validate-javascript.result }}'
+          go='${{ needs.validate-go.result }}'
+          echo "detect=${detect} python=${py} javascript=${js} go=${go}"
+          if [ "$detect" != success ]; then
+            echo "::error::Detect Changed Lambdas did not succeed"
+            exit 1
+          fi
+          for pair in "python:${py}" "javascript:${js}" "go:${go}"; do
+            lang="${pair%%:*}"
+            result="${pair#*:}"
+            case "$result" in
+              success|skipped) ;;
+              *)
+                echo "::error::Validate ${lang} result is ${result}"
+                exit 1
+                ;;
+            esac
+          done
